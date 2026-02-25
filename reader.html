@@ -3,156 +3,127 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sentence Reader</title>
+    <title>English Sentence Reader</title>
     <style>
-        /* CSS样式 */
         body {
             font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f0f0f0;
+            margin: 20px;
         }
-
-        #container {
-            width: 80%;
-            max-width: 800px;
-            background-color: #fff;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        h1 {
-            text-align: center;
-        }
-
-        textarea {
+        #inputText {
             width: 100%;
             height: 100px;
-            margin-bottom: 10px;
         }
-
-        button {
-            display: block;
-            width: 100%;
-            padding: 10px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-        }
-
-        button:hover {
-            background-color: #45a049;
-        }
-
         #output {
             margin-top: 20px;
         }
-
         .sentence {
-            display: inline-block;
-            margin-right: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        .speaker {
             cursor: pointer;
+            margin-right: 10px;
+            font-size: 20px;
         }
-
-        .sentence:hover {
-            color: #007BFF;
+        .sentence-text {
+            flex: 1;
         }
-
+        .word {
+            cursor: pointer;
+            padding: 2px;
+        }
         .highlight {
             background-color: yellow;
-        }
-
-        .speaker {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            background-image: url('https://img.icons8.com/ios/50/000000/volume-up.png');
-            background-size: cover;
-            cursor: pointer;
-            margin-left: 5px;
         }
     </style>
 </head>
 <body>
-    <div id="container">
-        <h1>Text Reader</h1>
-        <textarea id="inputText" placeholder="Enter English text here"></textarea>
-        <button onclick="processText()">Process Text</button>
-        <div id="output"></div>
-    </div>
+    <h1>English Sentence Reader</h1>
+    <textarea id="inputText" placeholder="Enter English text here..."></textarea>
+    <button id="processBtn">Process Text</button>
+    <div id="output"></div>
+
     <script>
-        // JavaScript功能
+        const processBtn = document.getElementById('processBtn');
+        const inputText = document.getElementById('inputText');
+        const output = document.getElementById('output');
 
-        // Function to process the input text
-        function processText() {
-            const text = document.getElementById('inputText').value;
-            const sentences = text.split(/(?<=[.!?])/); // Split text by punctuation marks
-            const outputDiv = document.getElementById('output');
-            outputDiv.innerHTML = ''; // Clear previous output
+        processBtn.addEventListener('click', processInput);
 
-            sentences.forEach(sentence => {
-                // Create a sentence element
-                const sentenceDiv = document.createElement('span');
-                sentenceDiv.classList.add('sentence');
-                sentenceDiv.textContent = sentence;
+        function processInput() {
+            const text = inputText.value.trim();
+            if (!text) return;
 
-                // Add a speaker button for each sentence
-                const speakerDiv = document.createElement('span');
-                speakerDiv.classList.add('speaker');
-                speakerDiv.onclick = () => readSentence(sentenceDiv, sentence);
-                
-                sentenceDiv.appendChild(speakerDiv);
-                outputDiv.appendChild(sentenceDiv);
-            });
-        }
-
-        // Function to read a sentence and highlight it
-        function readSentence(sentenceDiv, sentence) {
-            // Highlight the sentence
-            const allSentences = document.querySelectorAll('.sentence');
-            allSentences.forEach(s => s.classList.remove('highlight')); // Remove highlight from all
-            sentenceDiv.classList.add('highlight'); // Add highlight to clicked sentence
+            // Split into sentences based on punctuation: . ! ? , ; :
+            // This regex splits on any punctuation followed by space or end, but keeps the punctuation with the sentence.
+            const sentences = text.match(/[^.!?,;:]+[.!?,;:]*/g) || [];
             
-            // Use SpeechSynthesis to read the sentence aloud
-            const utterance = new SpeechSynthesisUtterance(sentence);
-            window.speechSynthesis.speak(utterance);
-        }
+            output.innerHTML = ''; // Clear previous output
 
-        // Function to highlight a word when clicked
-        function highlightWord(event) {
-            const word = event.target;
-            word.style.backgroundColor = 'yellow';
+            sentences.forEach((sentence, index) => {
+                const sentenceDiv = document.createElement('div');
+                sentenceDiv.classList.add('sentence');
 
-            // Read the word aloud
-            const utterance = new SpeechSynthesisUtterance(word.textContent);
-            window.speechSynthesis.speak(utterance);
-        }
+                // Speaker icon
+                const speaker = document.createElement('span');
+                speaker.classList.add('speaker');
+                speaker.textContent = '🔊';
+                speaker.addEventListener('click', () => readSentence(sentence, sentenceText));
 
-        // Add click event listener for each word
-        document.addEventListener('click', function(event) {
-            if (event.target.classList.contains('word')) {
-                highlightWord(event);
-            }
-        });
+                // Sentence text container
+                const sentenceText = document.createElement('span');
+                sentenceText.classList.add('sentence-text');
 
-        // Function to process text and highlight each word
-        function splitIntoWords(sentenceDiv, sentence) {
-            sentenceDiv.innerHTML = ''; // Clear the previous content
-            const words = sentence.split(' ');
+                // Split sentence into words (including punctuation attached to words)
+                const words = sentence.trim().split(/\s+/);
+                words.forEach(word => {
+                    const wordSpan = document.createElement('span');
+                    wordSpan.classList.add('word');
+                    wordSpan.textContent = word + ' '; // Add space back
+                    wordSpan.addEventListener('click', () => readWord(word, wordSpan));
+                    sentenceText.appendChild(wordSpan);
+                });
 
-            words.forEach(word => {
-                const wordSpan = document.createElement('span');
-                wordSpan.classList.add('word');
-                wordSpan.textContent = word + ' ';
-                wordSpan.onclick = highlightWord;
-                sentenceDiv.appendChild(wordSpan);
+                sentenceDiv.appendChild(speaker);
+                sentenceDiv.appendChild(sentenceText);
+                output.appendChild(sentenceDiv);
             });
+        }
+
+        function readSentence(sentence, sentenceText) {
+            // Remove previous highlights
+            document.querySelectorAll('.highlight').forEach(el => el.classList.remove('highlight'));
+
+            // Highlight the sentence
+            sentenceText.classList.add('highlight');
+
+            // Speak the sentence
+            const utterance = new SpeechSynthesisUtterance(sentence.trim());
+            utterance.lang = 'en-US';
+            utterance.onend = () => {
+                sentenceText.classList.remove('highlight');
+            };
+            speechSynthesis.speak(utterance);
+        }
+
+        function readWord(word, wordSpan) {
+            // Remove previous highlights
+            document.querySelectorAll('.highlight').forEach(el => el.classList.remove('highlight'));
+
+            // Highlight the word
+            wordSpan.classList.add('highlight');
+
+            // Clean word by removing punctuation for pronunciation
+            const cleanWord = word.replace(/[.,!?;:]/g, '');
+
+            // Speak the word
+            const utterance = new SpeechSynthesisUtterance(cleanWord);
+            utterance.lang = 'en-US';
+            utterance.onend = () => {
+                wordSpan.classList.remove('highlight');
+            };
+            speechSynthesis.speak(utterance);
         }
     </script>
 </body>
