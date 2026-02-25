@@ -124,10 +124,11 @@ const voiceSelect = document.getElementById('voiceSelect');
 let allVoices = [];
 let currentUtterance = null;
 
-// 加载所有声音
+// 加载所有声音，并默认选中 Samantha
 function loadVoices() {
   allVoices = window.speechSynthesis.getVoices();
   voiceSelect.innerHTML = '';
+
   allVoices.forEach((voice, i) => {
     if (voice.lang.includes('en')) {
       const option = document.createElement('option');
@@ -136,6 +137,14 @@ function loadVoices() {
       voiceSelect.appendChild(option);
     }
   });
+
+  // 自动选中 Samantha
+  const samanthaIndex = allVoices.findIndex(v => 
+    v.name.includes('Samantha') && v.lang.includes('en-US')
+  );
+  if (samanthaIndex !== -1) {
+    voiceSelect.value = samanthaIndex;
+  }
 }
 
 // 获取当前选中的声音
