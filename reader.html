@@ -1,58 +1,106 @@
-	<!DOCTYPE html>
-	<html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>英语朗读器</title>
 <style>
-  body { font-family: sans-serif; padding: 20px; background: #f5f5f5; }
-  textarea { width: 100%; height: 150px; font-size: 16px; padding: 10px; }
-  button { margin-top: 10px; padding: 10px 20px; font-size: 16px; }
-  #output p { cursor: pointer; padding: 5px; margin: 3px 0; border-radius: 4px; }
-  #output p.highlight { background: #ffd966; }
-  label { display: block; margin-top: 10px; }
+body { font-family: sans-serif; padding: 20px; background: #f5f5f5; }
+textarea { width: 100%; height: 150px; font-size: 16px; padding: 10px; }
+button { margin-top: 10px; padding: 10px 20px; font-size: 16px; }
+#output p { cursor: pointer; padding: 6px; margin: 4px 0; border-radius: 4px; }
+#output p.highlight { background: #ffd966; }
+label { display: block; margin-top: 10px; }
+select { padding: 5px; font-size: 16px; }
 </style>
 </head>
 <body>
 
-<h2>英语朗读器（点击句子朗读）</h2>
+<h2>英语朗读器（标点断句版）</h2>
 
 <textarea id="input" placeholder="在这里粘贴英文文章"></textarea>
-<br>
-<label>语速: <input type="range" id="speed" min="0.5" max="2" value="1" step="0.1"></label>
+
+<label>语速选择：
+<select id="speed">
+  <option value="0.25">0.25x</option>
+  <option value="0.5">0.5x</option>
+  <option value="0.75">0.75x</option>
+  <option value="1" selected>1x</option>
+  <option value="1.25">1.25x</option>
+  <option value="1.5">1.5x</option>
+  <option value="2">2x</option>
+</select>
+</label>
+
+<label>语音选择：
+<select id="voiceSelect"></select>
+</label>
+
 <button onclick="process()">处理文章</button>
 
 <div id="output"></div>
 
 <script>
 let currentHighlight = null;
+let voices = [];
+
+function loadVoices() {
+  voices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
+  let select = document.getElementById("voiceSelect");
+  select.innerHTML = "";
+  voices.forEach(v => {
+    let option = document.createElement("option");
+    option.value = v.name;
+    option.textContent = v.name + " (" + v.lang + ")";
+    select.appendChild(option);
+  });
+}
+
+speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
 
 function process() {
-  // 停止任何正在朗读
   speechSynthesis.cancel();
-  
   let text = document.getElementById("input").value;
   if (!text) return alert("请先输入英文文章！");
-  
-  // 分句（按 . ! ? 分割）
-  let sentences = text.match(/[^.!?]+[.!?]?/g).map(s => s.trim()).filter(s => s.length > 0);
+
+  // 🔥 标点断句（遇到标点就断开）
+  let sentences = text.split(/([,.!?;:])/)
+    .reduce((acc, cur, i, arr) => {
+      if (/[,.!?;:]/.test(cur)) {
+        acc[acc.length - 1] += cur;
+      } else {
+        acc.push(cur);
+      }
+      return acc;
+    }, [])
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+
   let output = document.getElementById("output");
   output.innerHTML = "";
 
-  sentences.forEach((sentence, index) => {
+  sentences.forEach(sentence => {
     let p = document.createElement("p");
     p.textContent = sentence;
+
     p.onclick = function() {
+      speechSynthesis.cancel();
+
       if (currentHighlight) currentHighlight.classList.remove("highlight");
       p.classList.add("highlight");
       currentHighlight = p;
-      
+
       let utterance = new SpeechSynthesisUtterance(sentence);
-      utterance.lang = "en-US";
+      let selectedVoiceName = document.getElementById("voiceSelect").value;
+      utterance.voice = voices.find(v => v.name === selectedVoiceName);
+      utterance.lang = utterance.voice?.lang || "en-US";
       utterance.rate = parseFloat(document.getElementById("speed").value);
+
       utterance.onend = () => { p.classList.remove("highlight"); };
       speechSynthesis.speak(utterance);
     };
+
     output.appendChild(p);
   });
 }
