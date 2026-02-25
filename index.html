@@ -27,6 +27,17 @@ body {
   margin: 30px 0 20px;
 }
 
+#voiceSelect {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  background: #fff;
+  outline: none;
+}
+
 #inputArea {
   width: 100%;
   height: 180px;
@@ -97,6 +108,9 @@ body {
 
 <body>
   <div class="title">English Reader</div>
+
+  <select id="voiceSelect"></select>
+
   <textarea id="inputArea" placeholder="Paste your English text here..."></textarea>
   <button id="goBtn">Go</button>
   <div id="result"></div>
@@ -105,40 +119,45 @@ body {
 const inputArea = document.getElementById('inputArea');
 const goBtn = document.getElementById('goBtn');
 const result = document.getElementById('result');
+const voiceSelect = document.getElementById('voiceSelect');
 
+let allVoices = [];
 let currentUtterance = null;
 
-// 强制加载声音列表
-let allVoices = [];
+// 加载所有声音
 function loadVoices() {
   allVoices = window.speechSynthesis.getVoices();
+  voiceSelect.innerHTML = '';
+  allVoices.forEach((voice, i) => {
+    if (voice.lang.includes('en')) {
+      const option = document.createElement('option');
+      option.value = i;
+      option.textContent = `${voice.name} (${voice.lang})`;
+      voiceSelect.appendChild(option);
+    }
+  });
 }
+
+// 获取当前选中的声音
+function getSelectedVoice() {
+  return allVoices[voiceSelect.value] || allVoices.find(v => v.lang.includes('en-US'));
+}
+
 window.speechSynthesis.onvoiceschanged = loadVoices;
 loadVoices();
 
-// 【核心修复】精确匹配 iPhone 高清 Ava
-function getBestVoice() {
-  return allVoices.find(v => 
-    v.name === "Ava" && v.lang === "en-US"
-  ) || allVoices.find(v => 
-    v.name.includes("Ava") && v.lang.includes("en-US")
-  ) || allVoices.find(v => 
-    v.lang === "en-US"
-  ) || allVoices[0];
-}
-
+// 分段逻辑
 goBtn.addEventListener('click', () => {
   const text = inputArea.value.trim();
   if (!text) return;
 
   const splitSymbols = /([.,?!;:、，。？！；：])/g;
   const rawParts = text.split(splitSymbols);
-
   const segments = [];
+  
   for (let i = 0; i < rawParts.length; i += 2) {
-    let part = rawParts[i] || '';
-    const sym = rawParts[i + 1] || '';
-    part = (part + sym).trim();
+    let part = (rawParts[i] || '') + (rawParts[i + 1] || '');
+    part = part.trim();
     if (part) segments.push(part);
   }
 
@@ -178,24 +197,24 @@ function renderResult(segments) {
   });
 }
 
+// 朗读句子
 function speakSentence(text, sentenceEl) {
   stopSpeaking();
   document.querySelectorAll('.sentence').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.word').forEach(w => w.classList.remove('active'));
 
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'en-US';
-  u.voice = getBestVoice();
+  u.voice = getSelectedVoice();
   u.rate = 0.96;
   u.pitch = 1.0;
 
   sentenceEl.classList.add('active');
   u.onend = () => sentenceEl.classList.remove('active');
-
   window.speechSynthesis.speak(u);
   currentUtterance = u;
 }
 
+// 朗读单词
 function speakWord(word, wordEl) {
   stopSpeaking();
   document.querySelectorAll('.sentence').forEach(s => s.classList.remove('active'));
@@ -203,10 +222,8 @@ function speakWord(word, wordEl) {
   wordEl.classList.add('active');
 
   const u = new SpeechSynthesisUtterance(word);
-  u.lang = 'en-US';
-  u.voice = getBestVoice();
+  u.voice = getSelectedVoice();
   u.rate = 0.9;
-
   window.speechSynthesis.speak(u);
 }
 
