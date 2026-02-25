@@ -51,12 +51,36 @@
 
         processBtn.addEventListener('click', processInput);
 
+        // Function to get the Ava high-quality voice on iPhone
+        function getAvaVoice() {
+            return new Promise((resolve) => {
+                let voices = speechSynthesis.getVoices();
+                const checkVoices = () => {
+                    voices = speechSynthesis.getVoices();
+                    // Look for voices with 'Ava' in the name, preferring enhanced/high-quality
+                    const avaVoice = voices.find(voice => 
+                        voice.name.toLowerCase().includes('ava') && 
+                        voice.lang === 'en-US' && 
+                        (voice.name.toLowerCase().includes('enhanced') || voice.name.toLowerCase().includes('premium') || voice.quality === 'enhanced' || voice.default)
+                    ) || voices.find(voice => voice.name.toLowerCase().includes('ava') && voice.lang === 'en-US') || 
+                      voices.find(voice => voice.lang === 'en-US' && voice.default);
+
+                    resolve(avaVoice);
+                };
+
+                if (voices.length > 0) {
+                    checkVoices();
+                } else {
+                    speechSynthesis.onvoiceschanged = checkVoices;
+                }
+            });
+        }
+
         function processInput() {
             const text = inputText.value.trim();
             if (!text) return;
 
             // Split into sentences based on punctuation: . ! ? , ; :
-            // This regex splits on any punctuation followed by space or end, but keeps the punctuation with the sentence.
             const sentences = text.match(/[^.!?,;:]+[.!?,;:]*/g) || [];
             
             output.innerHTML = ''; // Clear previous output
@@ -91,23 +115,25 @@
             });
         }
 
-        function readSentence(sentence, sentenceText) {
+        async function readSentence(sentence, sentenceText) {
             // Remove previous highlights
             document.querySelectorAll('.highlight').forEach(el => el.classList.remove('highlight'));
 
             // Highlight the sentence
             sentenceText.classList.add('highlight');
 
-            // Speak the sentence
+            // Speak the sentence using Ava voice
+            const voice = await getAvaVoice();
             const utterance = new SpeechSynthesisUtterance(sentence.trim());
             utterance.lang = 'en-US';
+            if (voice) utterance.voice = voice;
             utterance.onend = () => {
                 sentenceText.classList.remove('highlight');
             };
             speechSynthesis.speak(utterance);
         }
 
-        function readWord(word, wordSpan) {
+        async function readWord(word, wordSpan) {
             // Remove previous highlights
             document.querySelectorAll('.highlight').forEach(el => el.classList.remove('highlight'));
 
@@ -117,9 +143,11 @@
             // Clean word by removing punctuation for pronunciation
             const cleanWord = word.replace(/[.,!?;:]/g, '');
 
-            // Speak the word
+            // Speak the word using Ava voice
+            const voice = await getAvaVoice();
             const utterance = new SpeechSynthesisUtterance(cleanWord);
             utterance.lang = 'en-US';
+            if (voice) utterance.voice = voice;
             utterance.onend = () => {
                 wordSpan.classList.remove('highlight');
             };
