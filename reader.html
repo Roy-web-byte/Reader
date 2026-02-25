@@ -1,110 +1,98 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>英语朗读器</title>
-<style>
-body { font-family: sans-serif; padding: 20px; background: #f5f5f5; }
-textarea { width: 100%; height: 150px; font-size: 16px; padding: 10px; }
-button { margin-top: 10px; padding: 10px 20px; font-size: 16px; }
-#output p { cursor: pointer; padding: 6px; margin: 4px 0; border-radius: 4px; }
-#output p.highlight { background: #ffd966; }
-label { display: block; margin-top: 10px; }
-select { padding: 5px; font-size: 16px; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Azure TTS Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    textarea { width: 100%; height: 150px; font-size: 16px; padding: 10px; }
+    button { margin-top: 10px; padding: 10px 20px; font-size: 16px; }
+    select { padding: 5px; font-size: 16px; }
+  </style>
 </head>
 <body>
 
-<h2>英语朗读器（标点断句版）</h2>
+  <h2>Text to Speech Demo (Azure)</h2>
 
-<textarea id="input" placeholder="在这里粘贴英文文章"></textarea>
+  <textarea id="inputText" placeholder="Enter your text here"></textarea>
 
-<label>语速选择：
-<select id="speed">
-  <option value="0.25">0.25x</option>
-  <option value="0.5">0.5x</option>
-  <option value="0.75">0.75x</option>
-  <option value="1" selected>1x</option>
-  <option value="1.25">1.25x</option>
-  <option value="1.5">1.5x</option>
-  <option value="2">2x</option>
-</select>
-</label>
+  <label for="speedSelect">Select Speed:</label>
+  <select id="speedSelect">
+    <option value="0.75">0.75x</option>
+    <option value="1" selected>1x</option>
+    <option value="1.25">1.25x</option>
+    <option value="1.5">1.5x</option>
+    <option value="2">2x</option>
+  </select>
 
-<label>语音选择：
-<select id="voiceSelect"></select>
-</label>
+  <button onclick="speakText()">Speak Text</button>
 
-<button onclick="process()">处理文章</button>
+  <script>
+    // Your Azure Speech API Key and Region
+    const apiKey = 'YOUR_API_KEY';  // Replace with your API Key
+    const region = 'YOUR_REGION';   // Replace with your region (e.g., "eastus")
 
-<div id="output"></div>
+    async function speakText() {
+      const text = document.getElementById("inputText").value;
+      const speed = document.getElementById("speedSelect").value;
 
-<script>
-let currentHighlight = null;
-let voices = [];
-
-function loadVoices() {
-  voices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
-  let select = document.getElementById("voiceSelect");
-  select.innerHTML = "";
-  voices.forEach(v => {
-    let option = document.createElement("option");
-    option.value = v.name;
-    option.textContent = v.name + " (" + v.lang + ")";
-    select.appendChild(option);
-  });
-}
-
-speechSynthesis.onvoiceschanged = loadVoices;
-loadVoices();
-
-function process() {
-  speechSynthesis.cancel();
-  let text = document.getElementById("input").value;
-  if (!text) return alert("请先输入英文文章！");
-
-  // 🔥 标点断句（遇到标点就断开）
-  let sentences = text.split(/([,.!?;:])/)
-    .reduce((acc, cur, i, arr) => {
-      if (/[,.!?;:]/.test(cur)) {
-        acc[acc.length - 1] += cur;
-      } else {
-        acc.push(cur);
+      if (!text) {
+        alert("Please enter some text.");
+        return;
       }
-      return acc;
-    }, [])
-    .map(s => s.trim())
-    .filter(s => s.length > 0);
 
-  let output = document.getElementById("output");
-  output.innerHTML = "";
+      const audioUrl = await getAzureSpeechAudioUrl(text, speed);
+      playAudio(audioUrl);
+    }
 
-  sentences.forEach(sentence => {
-    let p = document.createElement("p");
-    p.textContent = sentence;
+    async function getAzureSpeechAudioUrl(text, speed) {
+      const url = `https://${region}.api.cognitive.microsoft.com/sts/v1.0/issuetoken`;
+      const token = await getAzureToken(url);
 
-    p.onclick = function() {
-      speechSynthesis.cancel();
+      const speechUrl = `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`;
+      const headers = {
+        'Content-Type': 'application/ssml+xml',
+        'Authorization': `Bearer ${token}`,
+        'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3'
+      };
 
-      if (currentHighlight) currentHighlight.classList.remove("highlight");
-      p.classList.add("highlight");
-      currentHighlight = p;
+      const body = `
+        <speak xmlns="http://www.w3.org/2001/10/synthesis" version="1.0" xmlns:lex="http://www.w3.org/2006/12/lex">
+          <voice name="en-US-JessaNeural">
+            <prosody rate="${speed}">
+              ${text}
+            </prosody>
+          </voice>
+        </speak>
+      `;
 
-      let utterance = new SpeechSynthesisUtterance(sentence);
-      let selectedVoiceName = document.getElementById("voiceSelect").value;
-      utterance.voice = voices.find(v => v.name === selectedVoiceName);
-      utterance.lang = utterance.voice?.lang || "en-US";
-      utterance.rate = parseFloat(document.getElementById("speed").value);
+      const response = await fetch(speechUrl, {
+        method: 'POST',
+        headers: headers,
+        body: body
+      });
 
-      utterance.onend = () => { p.classList.remove("highlight"); };
-      speechSynthesis.speak(utterance);
-    };
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      return audioUrl;
+    }
 
-    output.appendChild(p);
-  });
-}
-</script>
+    async function getAzureToken(url) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Ocp-Apim-Subscription-Key': apiKey
+        }
+      });
+      return response.text();
+    }
+
+    function playAudio(url) {
+      const audio = new Audio(url);
+      audio.play();
+    }
+  </script>
 
 </body>
 </html>
