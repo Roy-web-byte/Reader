@@ -1,98 +1,159 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Azure TTS Demo</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    textarea { width: 100%; height: 150px; font-size: 16px; padding: 10px; }
-    button { margin-top: 10px; padding: 10px 20px; font-size: 16px; }
-    select { padding: 5px; font-size: 16px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentence Reader</title>
+    <style>
+        /* CSS样式 */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+
+        #container {
+            width: 80%;
+            max-width: 800px;
+            background-color: #fff;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #output {
+            margin-top: 20px;
+        }
+
+        .sentence {
+            display: inline-block;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        .sentence:hover {
+            color: #007BFF;
+        }
+
+        .highlight {
+            background-color: yellow;
+        }
+
+        .speaker {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            background-image: url('https://img.icons8.com/ios/50/000000/volume-up.png');
+            background-size: cover;
+            cursor: pointer;
+            margin-left: 5px;
+        }
+    </style>
 </head>
 <body>
+    <div id="container">
+        <h1>Text Reader</h1>
+        <textarea id="inputText" placeholder="Enter English text here"></textarea>
+        <button onclick="processText()">Process Text</button>
+        <div id="output"></div>
+    </div>
+    <script>
+        // JavaScript功能
 
-  <h2>Text to Speech Demo (Azure)</h2>
+        // Function to process the input text
+        function processText() {
+            const text = document.getElementById('inputText').value;
+            const sentences = text.split(/(?<=[.!?])/); // Split text by punctuation marks
+            const outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = ''; // Clear previous output
 
-  <textarea id="inputText" placeholder="Enter your text here"></textarea>
+            sentences.forEach(sentence => {
+                // Create a sentence element
+                const sentenceDiv = document.createElement('span');
+                sentenceDiv.classList.add('sentence');
+                sentenceDiv.textContent = sentence;
 
-  <label for="speedSelect">Select Speed:</label>
-  <select id="speedSelect">
-    <option value="0.75">0.75x</option>
-    <option value="1" selected>1x</option>
-    <option value="1.25">1.25x</option>
-    <option value="1.5">1.5x</option>
-    <option value="2">2x</option>
-  </select>
-
-  <button onclick="speakText()">Speak Text</button>
-
-  <script>
-    // Your Azure Speech API Key and Region
-    const apiKey = 'YOUR_API_KEY';  // Replace with your API Key
-    const region = 'YOUR_REGION';   // Replace with your region (e.g., "eastus")
-
-    async function speakText() {
-      const text = document.getElementById("inputText").value;
-      const speed = document.getElementById("speedSelect").value;
-
-      if (!text) {
-        alert("Please enter some text.");
-        return;
-      }
-
-      const audioUrl = await getAzureSpeechAudioUrl(text, speed);
-      playAudio(audioUrl);
-    }
-
-    async function getAzureSpeechAudioUrl(text, speed) {
-      const url = `https://${region}.api.cognitive.microsoft.com/sts/v1.0/issuetoken`;
-      const token = await getAzureToken(url);
-
-      const speechUrl = `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`;
-      const headers = {
-        'Content-Type': 'application/ssml+xml',
-        'Authorization': `Bearer ${token}`,
-        'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3'
-      };
-
-      const body = `
-        <speak xmlns="http://www.w3.org/2001/10/synthesis" version="1.0" xmlns:lex="http://www.w3.org/2006/12/lex">
-          <voice name="en-US-JessaNeural">
-            <prosody rate="${speed}">
-              ${text}
-            </prosody>
-          </voice>
-        </speak>
-      `;
-
-      const response = await fetch(speechUrl, {
-        method: 'POST',
-        headers: headers,
-        body: body
-      });
-
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      return audioUrl;
-    }
-
-    async function getAzureToken(url) {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Ocp-Apim-Subscription-Key': apiKey
+                // Add a speaker button for each sentence
+                const speakerDiv = document.createElement('span');
+                speakerDiv.classList.add('speaker');
+                speakerDiv.onclick = () => readSentence(sentenceDiv, sentence);
+                
+                sentenceDiv.appendChild(speakerDiv);
+                outputDiv.appendChild(sentenceDiv);
+            });
         }
-      });
-      return response.text();
-    }
 
-    function playAudio(url) {
-      const audio = new Audio(url);
-      audio.play();
-    }
-  </script>
+        // Function to read a sentence and highlight it
+        function readSentence(sentenceDiv, sentence) {
+            // Highlight the sentence
+            const allSentences = document.querySelectorAll('.sentence');
+            allSentences.forEach(s => s.classList.remove('highlight')); // Remove highlight from all
+            sentenceDiv.classList.add('highlight'); // Add highlight to clicked sentence
+            
+            // Use SpeechSynthesis to read the sentence aloud
+            const utterance = new SpeechSynthesisUtterance(sentence);
+            window.speechSynthesis.speak(utterance);
+        }
 
+        // Function to highlight a word when clicked
+        function highlightWord(event) {
+            const word = event.target;
+            word.style.backgroundColor = 'yellow';
+
+            // Read the word aloud
+            const utterance = new SpeechSynthesisUtterance(word.textContent);
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // Add click event listener for each word
+        document.addEventListener('click', function(event) {
+            if (event.target.classList.contains('word')) {
+                highlightWord(event);
+            }
+        });
+
+        // Function to process text and highlight each word
+        function splitIntoWords(sentenceDiv, sentence) {
+            sentenceDiv.innerHTML = ''; // Clear the previous content
+            const words = sentence.split(' ');
+
+            words.forEach(word => {
+                const wordSpan = document.createElement('span');
+                wordSpan.classList.add('word');
+                wordSpan.textContent = word + ' ';
+                wordSpan.onclick = highlightWord;
+                sentenceDiv.appendChild(wordSpan);
+            });
+        }
+    </script>
 </body>
 </html>
