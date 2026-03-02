@@ -265,7 +265,26 @@ function stopSpeaking() {
   if (window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
   }
-}
+} 
+  
+<!-- 防止 iPhone 熄屏、保持长亮 -->
+  // 每隔 30 秒发一次空请求，防止锁屏
+  let wakeLock = null;
+
+  async function keepScreenOn() {
+    if ('wakeLock' in navigator) {
+      try {
+        wakeLock = await navigator.wakeLock.request('screen');
+      } catch (err) {}
+    }
+  }
+
+  // 页面加载就启动
+  window.addEventListener('load', keepScreenOn);
+  // 切回页面重新激活
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) keepScreenOn();
+  });
 </script>
 </body>
 </html>
