@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>English Reader</title>
+    <style>
+        :root {
+            --bg-color: #f2f2f7;      /* iOS 轻灰背景 */
+            --card-bg: #ffffff;       /* 卡片纯白 */
+            --text-main: #1c1c1e;     /* iOS 深色文本 */
+            --ipa-color: #1a56db;     /* 要求的醒目蓝色 */
+            --highlight-word: #e5e5ea; 
+            --highlight-sentence: rgba(26, 86, 219, 0.1); 
+            --loop-bg: #ffcc00;       /* 橘黄色循环背景 */
+            --radius: 16px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* 顶部标题栏 */
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+        }
+        .header:active {
+            background-color: #e5e5ea;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .header p {
+            margin: 5px 0 0 0;
+            font-size: 14px;
+            color: #8e8e93;
+        }
+
+        /* 输入区 */
+        .input-card {
+            background-color: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+            margin-bottom: 24px;
+        }
+        textarea {
+            width: 100%;
+            height: 120px;
+            border: none;
+            resize: none;
+            font-size: 16px;
+            font-family: inherit;
+            outline: none;
+            background: transparent;
+        }
+        
+        .btn-go {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            background-color: #007aff;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 12px;
+            transition: transform 0.1s, opacity 0.2s;
+        }
+        .btn-go:active {
+            transform: scale(0.98);
+            opacity: 0.8;
+        }
+
+        /* 输出阅读区 */
+        .output-card {
+            background-color: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+            display: none;
+            font-size: 18px;
+        }
+
+        /* 句子与单词排版（防重叠核心逻辑） */
+        .sentence {
+            display: inline;
+            cursor: pointer;
+            border-radius: 6px;
+            padding: 4px 2px;
+            margin-right: 4px;
+            transition: background-color 0.3s ease;
+            /* 保证句子和句子之间的行距，容纳音标 */
+            line-height: 2.8; 
+        }
+
+        .word-container {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            vertical-align: bottom;
+            margin: 0 2px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .word {
+            font-weight: 500;
+        }
+
+        .ipa {
+            color: var(--ipa-color);
+            font-size: 14px;
+            line-height: 1;
+            margin-top: 2px;
+            font-family: "Lucida Sans Unicode", "Arial Unicode MS", sans-serif;
+            pointer-events: none; /* 防止点击音标触发异常 */
+        }
+
+        /* 标点符号 */
+        .punctuation {
+            display: inline-block;
+            vertical-align: text-bottom;
+        }
+
+        /* 高亮状态 */
+        .highlight-word {
+            background-color: var(--highlight-word);
+        }
+        .highlight-sentence {
+            background-color: var(--highlight-sentence);
+        }
+        .loop-sentence {
+            background-color: var(--loop-bg) !important;
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header" id="title-btn" title="Click to read full text">
+        <h1>English Reader</h1>
+        <p>Click title to read all • Click sentence to read • Double-click to loop</p>
+    </div>
+
+    <div class="input-card" id="input-section">
+        <textarea id="text-input" placeholder="Paste your English text here... 
+e.g. Hello, Mr. Smith! It is 10:30 a.m. in the U.S.A."></textarea>
+        <button class="btn-go" id="btn-go">Go</button>
+    </div>
+
+    <div class="output-card" id="output-section"></div>
+</div>
+
+<script>
+    /**
+     * ==========================================
+     * 1. 核心词典与缓存配置
+     * ==========================================
+     * 此处内置了测试用例及常见缩写。
+     * 你可以将完整的 15000+ 词汇 JSON 直接替换这个对象。
+     */
+    const ukPhoneticMap = {
+        "hello": "/həˈləʊ/", "world": "/wɜːld/", "mr": "/ˈmɪstə/", "dr": "/ˈdɒktə/",
+        "u.s.a": "/ˌjuː es ˈeɪ/", "a.m": "/ˌeɪ ˈem/", "is": "/ɪz/", "in": "/ɪn/",
+        "the": "/ðə/", "went": "/went/", "done": "/dʌn/", "read": "/riːd/"
+    };
+    
+    // 缓存机制 (Map结构) 避免重复查询
+    const ipaCache = new Map();
+
+    function getPhonetic(word) {
+        // 清理末尾可能的标点残留并转小写
+        const cleanWord = word.replace(/[^a-zA-Z\.']/g, '').toLowerCase();
+        if (!cleanWord) return "";
+        if (ipaCache.has(cleanWord)) return ipaCache.get(cleanWord);
+        
+        const ipa = ukPhoneticMap[cleanWord] || "";
+        ipaCache.set(cleanWord, ipa);
+        return ipa;
+    }
+
+    /**
+     * ==========================================
+     * 2. 语音引擎与唤醒锁 (Wake Lock)
+     * ==========================================
+     */
+    let synth = window.speechSynthesis;
+    let preferredVoice = null;
+    let wakeLock = null;
+
+    // 自动检测最高质量语音 (优先 Samantha, US English)
+    function loadVoices() {
+        const voices = synth.getVoices();
+        preferredVoice = voices.find(v => v.name.includes('Samantha')) ||
+                         voices.find(v => v.name.includes('Google US English')) ||
+                         voices.find(v => v.lang === 'en-GB' && v.name.includes('Female')) ||
+                         voices.find(v => v.lang.startsWith('en'));
+    }
+    synth.onvoiceschanged = loadVoices;
+    loadVoices(); // 初始化尝试加载
+
+    // Wake Lock 屏幕常亮
+    async function requestWakeLock() {
+        try {
+            if ('wakeLock' in navigator) {
+                wakeLock = await navigator.wakeLock.request('screen');
+            }
+        } catch (err) {
+            console.log(`Wake Lock Error: ${err.name}, ${err.message}`);
+        }
+    }
+
+    /**
+     * ==========================================
+     * 3. 核心逻辑：精准断句
+     * ==========================================
+     */
+    function splitSentences(text) {
+        // 缩写白名单，防止误断句
+        const abbrevs = ["mr.", "mrs.", "ms.", "dr.", "prof.", "inc.", "ltd.", "u.s.a.", "u.s.", "u.k.", "e.g.", "i.e.", "st.", "a.m.", "p.m."];
+        let result = [];
+        let currentSentence = "";
+        
+        for (let i = 0; i < text.length; i++) {
+            currentSentence += text[i];
+            // 检测到终结符
+            if (/[.?!。？！]/.test(text[i])) {
+                let isAbbrev = false;
+                let lowerCurrent = currentSentence.toLowerCase().trim();
+                
+                // 校验是否为缩写
+                for (let abbr of abbrevs) {
+                    if (lowerCurrent.endsWith(" " + abbr) || lowerCurrent === abbr) {
+                        isAbbrev = true; break;
+                    }
+                }
+                
+                if (!isAbbrev) {
+                    // 向前看：如果终结符后没有紧跟字母或数字（例如时间10:30，或缩写内部U.S.A.），则断句
+                    if (i + 1 === text.length || /[\s\n\r]/.test(text[i+1]) || /[.?!。？！]/.test(text[i+1]) || /["'”’]/.test(text[i+1])) {
+                        result.push(currentSentence);
+                        currentSentence = "";
+                    }
+                }
+            }
+        }
+        if (currentSentence.trim()) result.push(currentSentence);
+        return result;
+    }
+
+    /**
+     * ==========================================
+     * 4. 渲染与交互绑定
+     * ==========================================
+     */
+    const outputSection = document.getElementById('output-section');
+    const textInput = document.getElementById('text-input');
+    
+    // 全局播放状态
+    let isLooping = false;
+    let isReadingAll = false;
+    let globalPlayQueue = [];
+    
+    function stopAllAudio() {
+        synth.cancel();
+        isLooping = false;
+        isReadingAll = false;
+        document.querySelectorAll('.highlight-word').forEach(el => el.classList.remove('highlight-word'));
+        document.querySelectorAll('.highlight-sentence').forEach(el => el.classList.remove('highlight-sentence'));
+        document.querySelectorAll('.loop-sentence').forEach(el => el.classList.remove('loop-sentence'));
+    }
+
+    function speak(text, onEndCallback = null) {
+        let utterance = new SpeechSynthesisUtterance(text);
+        if (preferredVoice) utterance.voice = preferredVoice;
+        if (onEndCallback) utterance.onend = onEndCallback;
+        synth.speak(utterance);
+    }
+
+    document.getElementById('btn-go').addEventListener('click', () => {
+        const rawText = textInput.value.trim();
+        if (!rawText) return;
+        
+        requestWakeLock();
+        outputSection.innerHTML = '';
+        outputSection.style.display = 'block';
+        
+        const sentences = splitSentences(rawText);
+        
+        sentences.forEach(sentenceStr => {
+            if (!sentenceStr.trim()) return;
+            
+            const sentenceEl = document.createElement('span');
+            sentenceEl.className = 'sentence';
+            sentenceEl.setAttribute('data-text', sentenceStr);
+            
+            // 单词拆分逻辑：保留原句内部的标点（如逗号、冒号、顿号），仅提取出英文单词匹配音标
+            const parts = sentenceStr.split(/([a-zA-Z]+(?:['’][a-zA-Z]+)?|\s+)/);
+            
+            parts.forEach(part => {
+                if (!part) return;
+                
+                // 如果是标准英文字母构成的单词
+                if (/^[a-zA-Z]+(?:['’][a-zA-Z]+)?$/.test(part)) {
+                    const wordContainer = document.createElement('span');
+                    wordContainer.className = 'word-container';
+                    
+                    const wordSpan = document.createElement('span');
+                    wordSpan.className = 'word';
+                    wordSpan.textContent = part;
+                    wordContainer.appendChild(wordSpan);
+                    
+                    const ipaStr = getPhonetic(part);
+                    if (ipaStr) {
+                        const ipaSpan = document.createElement('span');
+                        ipaSpan.className = 'ipa';
+                        ipaSpan.textContent = ipaStr;
+                        wordContainer.appendChild(ipaSpan);
+                    }
+                    
+                    // 单击单词：仅高亮该单词并播放
+                    wordContainer.addEventListener('click', (e) => {
+                        e.stopPropagation(); // 阻止冒泡到句子
+                        stopAllAudio();
+                        wordContainer.classList.add('highlight-word');
+                        speak(part, () => wordContainer.classList.remove('highlight-word'));
+                    });
+                    
+                    sentenceEl.appendChild(wordContainer);
+                } else {
+                    // 标点、空格、数字直接插入，保持语义完整性
+                    const textNode = document.createElement('span');
+                    textNode.className = 'punctuation';
+                    textNode.textContent = part;
+                    sentenceEl.appendChild(textNode);
+                }
+            });
+
+            // 句子点击与双击逻辑
+            let clickTimer = null;
+            sentenceEl.addEventListener('click', (e) => {
+                // 如果点到了单词内部，已被上面的 stopPropagation 拦截
+                if (clickTimer) {
+                    // 触发了双击
+                    clearTimeout(clickTimer);
+                    clickTimer = null;
+                    stopAllAudio();
+                    isLooping = true;
+                    sentenceEl.classList.add('loop-sentence');
+                    window.getSelection().removeAllRanges(); // 清除双击选中默认效果
+                    
+                    const loopPlay = () => {
+                        if (!isLooping) return;
+                        speak(sentenceStr, () => {
+                            if (isLooping) loopPlay();
+                        });
+                    };
+                    loopPlay();
+                } else {
+                    // 等待检查是否为单次点击
+                    clickTimer = setTimeout(() => {
+                        clickTimer = null;
+                        stopAllAudio();
+                        sentenceEl.classList.add('highlight-sentence');
+                        speak(sentenceStr, () => sentenceEl.classList.remove('highlight-sentence'));
+                    }, 250);
+                }
+            });
+
+            outputSection.appendChild(sentenceEl);
+        });
+    });
+
+    /**
+     * ==========================================
+     * 5. 全局操作与事件处理
+     * ==========================================
+     */
+    // 点击标题栏依次朗读全文
+    document.getElementById('title-btn').addEventListener('click', () => {
+        const sentenceEls = Array.from(document.querySelectorAll('.sentence'));
+        if (sentenceEls.length === 0) return;
+        
+        stopAllAudio();
+        isReadingAll = true;
+        let index = 0;
+        
+        const readNext = () => {
+            if (!isReadingAll || index >= sentenceEls.length) {
+                stopAllAudio();
+                return;
+            }
+            // 清理上一个高亮
+            if (index > 0) sentenceEls[index-1].classList.remove('highlight-sentence');
+            
+            const currentEl = sentenceEls[index];
+            currentEl.classList.add('highlight-sentence');
+            const text = currentEl.getAttribute('data-text');
+            
+            speak(text, () => {
+                index++;
+                readNext();
+            });
+        };
+        readNext();
+    });
+
+    // 点击页面空白处停止循环朗读
+    document.body.addEventListener('click', (e) => {
+        if (!e.target.closest('#output-section') && !e.target.closest('#title-btn') && !e.target.closest('#input-section')) {
+            if (isLooping || isReadingAll) {
+                stopAllAudio();
+            }
+        }
+    });
+
+    // 释放 Wake Lock
+    document.addEventListener('visibilitychange', () => {
+        if (wakeLock !== null && document.visibilityState === 'visible') {
+            requestWakeLock();
+        }
+    });
+
+</script>
+</body>
+</html>
