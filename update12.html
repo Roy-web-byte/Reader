@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>English Reader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap');
+        
+        body {
+            font-family: 'Inter', system_ui, sans-serif;
+        }
+        .title-font {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        .sentence-card {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .sentence-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+        .word {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .word:hover {
+            color: #1e3a8a;
+            transform: scale(1.05);
+        }
+        .ipa {
+            color: #1a56db;
+            font-family: ui-monospace, monospace;
+            font-size: 13.5px;
+            letter-spacing: 0.5px;
+        }
+        .highlight {
+            background-color: #fefce8;
+            transition: background-color 0.6s ease;
+        }
+        .looping {
+            background-color: #fed7aa;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.92; }
+        }
+        .speaker-btn {
+            transition: transform 0.2s ease;
+        }
+        .speaker-btn:active {
+            transform: scale(1.3);
+        }
+    </style>
+</head>
+<body class="bg-zinc-100 min-h-screen pb-12">
+    <div class="max-w-2xl mx-auto px-4 pt-8">
+        <!-- Header -->
+        <div onclick="readAllSentences()" class="flex flex-col items-center mb-10 cursor-pointer select-none">
+            <div class="flex items-center gap-x-3">
+                <div class="w-11 h-11 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center text-white text-3xl shadow-inner">📖</div>
+                <h1 class="title-font text-4xl font-semibold tracking-tighter text-zinc-900">English Reader</h1>
+            </div>
+            <p class="text-zinc-500 text-sm mt-1.5">精准断句 · 英式IPA · 一键朗读</p>
+        </div>
+
+        <!-- Input Area -->
+        <div class="bg-white rounded-3xl shadow-xl p-6 mb-10">
+            <textarea id="input" rows="7"
+                class="w-full resize-none border-0 focus:ring-2 focus:ring-blue-500 rounded-2xl px-5 py-4 text-[17px] leading-relaxed placeholder-zinc-400"
+                placeholder="在此粘贴英文段落..."></textarea>
+            
+            <button onclick="processText()"
+                class="mt-5 w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 transition-all text-white font-semibold text-lg py-4 rounded-3xl flex items-center justify-center gap-x-2 shadow-lg shadow-blue-200">
+                <span class="text-xl">🚀</span>
+                <span>Go</span>
+            </button>
+        </div>
+
+        <!-- Output -->
+        <div id="output" class="space-y-8"></div>
+    </div>
+
+    <script>
+        // Tailwind already loaded via CDN
+        const ipaCache = new Map();
+        let synth = window.speechSynthesis;
+        let voices = [];
+        let currentLoopUtterance = null;
+        let wakeLockInstance = null;
+
+        // Wake Lock
+        async function acquireWakeLock() {
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLockInstance = await navigator.wakeLock.request('screen');
+                } catch (e) {}
+            }
+        }
+
+        // Voice loading
+        function loadVoices() {
+            voices = synth.getVoices().filter(v => v.lang.startsWith('en'));
+        }
+        speechSynthesis.onvoiceschanged = loadVoices;
+        window.onload = () => {
+            loadVoices();
+            acquireWakeLock();
+        };
+
+        function getBestVoice() {
+            // Samantha (macOS) > Google UK > any en-GB > first English
+            return voices.find(v => v.name.includes('Samantha')) ||
+                   voices.find(v => v.name.toLowerCase().includes('uk') && v.name.includes('Google')) ||
+                   voices.find(v => v.lang === 'en-GB') ||
+                   voices.find(v => v.lang.startsWith('en')) ||
+                   voices[0];
+        }
+
+        // Precise sentence splitter (abbreviation safe)
+        function splitIntoSentences(text) {
+            if (!text.trim()) return [];
+            
+            const abbrs = [
+                'Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.', 'Sr.', 'Jr.', 'St.',
+                'U.S.', 'U.K.', 'U.S.A.', 'e.g.', 'i.e.', 'etc.', 'vs.',
+                'a.m.', 'p.m.', 'Inc.', 'Ltd.', 'Co.', 'Ph.D.', 'M.D.'
+            ];
+            
+            let protectedText = text;
+            const placeholders = {};
+            abbrs.forEach((abbr, i) => {
+                const ph = `__ABBR${i}__`;
+                placeholders[ph] = abbr;
+                protectedText = protectedText.replace(new RegExp(abbr.replace(/\./g, '\\.'), 'g'), ph);
+            });
+            
+            // Split only at real sentence terminators (lookbehind safe)
+            const regex = /(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=[.!?。？！])\s+/g;
+            let rawSentences = protectedText.split(regex);
+            
+            // Restore abbreviations
+            const sentences = rawSentences.map(s => {
+                let restored = s.trim();
+                Object.keys(placeholders).forEach(ph => {
+                    restored = restored.replace(new RegExp(ph, 'g'), placeholders[ph]);
+                });
+                return restored;
+            }).filter(s => s.length > 3);
+            
+            return sentences;
+        }
+
+        // Extract English words
+        function extractWords(sentence) {
+            return (sentence.match(/[\w']+/g) || []).filter(w => /[a-zA-Z]/.test(w));
+        }
+
+        // Get IPA (British phonetic from free dictionary API)
+        async function fetchIPA(word) {
+            const key = word.toLowerCase().replace(/[^a-z']/g, '');
+            if (!key || ipaCache.has(key)) return ipaCache.get(key) || null;
+            
+            try {
+                const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(key)}`);
+                if (!res.ok) throw new Error();
+                const data = await res.json();
+                let phonetic = data[0]?.phonetic || 
+                              (data[0]?.phonetics && data[0].phonetics[0] && data[0].phonetics[0].text) || 
+                              null;
+                if (phonetic) phonetic = phonetic.replace(/^\//, '').replace(/\/$/, '');
+                ipaCache.set(key, phonetic);
+                return phonetic;
+            } catch (e) {
+                ipaCache.set(key, null);
+                return null;
+            }
+        }
+
+        // Speak function
+        function speak(text, rate = 1.0) {
+            if (!synth) return;
+            synth.cancel();
+            
+            const u = new SpeechSynthesisUtterance(text);
+            const voice = getBestVoice();
+            if (voice) u.voice = voice;
+            u.lang = 'en-GB';
+            u.rate = rate;
+            u.pitch = 1.05;
+            synth.speak(u);
+        }
+
+        // Render single sentence card
+        async function renderSentence(sentence, container) {
+            const card = document.createElement('div');
+            card.className = `sentence-card bg-white rounded-3xl shadow-sm border border-zinc-100 overflow-hidden`;
+            
+            // Header: speaker + sentence text
+            const header = document.createElement('div');
+            header.className = 'px-7 pt-7 pb-6 flex gap-5 items-start border-b border-zinc-100';
+            
+            const speaker = document.createElement('button');
+            speaker.innerHTML = `🔊`;
+            speaker.className = `speaker-btn text-4xl flex-shrink-0 text-blue-600 hover:text-blue-700`;
+            speaker.onclick = (e) => {
+                e.stopImmediatePropagation();
+                speak(sentence);
+            };
+            header.appendChild(speaker);
+            
+            const textEl = document.createElement('div');
+            textEl.className = `flex-1 text-[17px] leading-[1.65] text-zinc-800 cursor-pointer select-text`;
+            textEl.textContent = sentence;
+            textEl.onclick = () => speak(sentence);
+            textEl.ondblclick = (e) => {
+                e.stopImmediatePropagation();
+                toggleLoopMode(sentence, card);
+            };
+            header.appendChild(textEl);
+            
+            card.appendChild(header);
+            
+            // Word breakdown
+            const words = extractWords(sentence);
+            if (words.length === 0) {
+                container.appendChild(card);
+                return;
+            }
+            
+            const wordGrid = document.createElement('div');
+            wordGrid.className = `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-8 gap-y-6 px-7 py-7 bg-zinc-50`;
+            
+            for (const word of words) {
+                const group = document.createElement('div');
+                group.className = `word-item flex flex-col items-center text-center`;
+                
+                const wordSpan = document.createElement('span');
+                wordSpan.className = `word text-[17px] font-medium text-zinc-800 cursor-pointer`;
+                wordSpan.textContent = word;
+                wordSpan.onclick = (e) => {
+                    e.stopImmediatePropagation();
+                    speak(word, 0.92);
+                };
+                group.appendChild(wordSpan);
+                
+                const ipaSpan = document.createElement('span');
+                ipaSpan.className = `ipa mt-1 block min-h-[18px]`;
+                ipaSpan.textContent = '…';
+                group.appendChild(ipaSpan);
+                
+                wordGrid.appendChild(group);
+                
+                // Async load IPA
+                fetchIPA(word).then(ipa => {
+                    if (ipa) {
+                        ipaSpan.textContent = `/${ipa}/`;
+                    } else {
+                        ipaSpan.textContent = '';
+                        ipaSpan.classList.add('opacity-30');
+                    }
+                });
+            }
+            
+            card.appendChild(wordGrid);
+            container.appendChild(card);
+        }
+
+        // Main process
+        async function processText() {
+            const input = document.getElementById('input').value.trim();
+            if (!input) {
+                alert('请粘贴英文文本');
+                return;
+            }
+            
+            const sentences = splitIntoSentences(input);
+            const output = document.getElementById('output');
+            output.innerHTML = `<div class="text-center py-12 text-zinc-400">正在解析句子并加载音标...</div>`;
+            
+            output.innerHTML = '';
+            
+            for (const sent of sentences) {
+                await renderSentence(sent, output);
+            }
+            
+            // Re-acquire wake lock if needed
+            if (!wakeLockInstance) acquireWakeLock();
+        }
+
+        // Read all sentences sequentially
+        async function readAllSentences() {
+            const cards = document.querySelectorAll('.sentence-card');
+            if (cards.length === 0) return;
+            
+            synth.cancel();
+            
+            for (let i = 0; i < cards.length; i++) {
+                const card = cards[i];
+                const textEl = card.querySelector('div[onclick]');
+                if (!textEl) continue;
+                
+                const sentenceText = textEl.textContent;
+                
+                // Highlight current
+                cards.forEach(c => c.classList.remove('highlight'));
+                card.classList.add('highlight');
+                
+                // Speak
+                await new Promise(resolve => {
+                    const u = new SpeechSynthesisUtterance(sentenceText);
+                    const voice = getBestVoice();
+                    if (voice) u.voice = voice;
+                    u.onend = resolve;
+                    synth.speak(u);
+                });
+                
+                await new Promise(r => setTimeout(r, 350)); // short pause
+            }
+            
+            cards.forEach(c => c.classList.remove('highlight'));
+        }
+
+        // Loop mode
+        let loopingCard = null;
+        function toggleLoopMode(sentence, card) {
+            synth.cancel();
+            
+            if (loopingCard === card) {
+                // Stop loop
+                loopingCard = null;
+                card.classList.remove('looping');
+                return;
+            }
+            
+            // Stop previous
+            if (loopingCard) loopingCard.classList.remove('looping');
+            
+            loopingCard = card;
+            card.classList.add('looping');
+            
+            // Start infinite loop
+            function loopIt() {
+                if (loopingCard !== card) return;
+                const u = new SpeechSynthesisUtterance(sentence);
+                const voice = getBestVoice();
+                if (voice) u.voice = voice;
+                u.onend = () => {
+                    if (loopingCard === card) setTimeout(loopIt, 650);
+                };
+                synth.speak(u);
+            }
+            loopIt();
+        }
+
+        // Keyboard shortcut: Ctrl/Cmd + Enter to Go
+        document.addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                processText();
+            }
+        });
+
+        // Click anywhere to stop loop
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.sentence-card')) {
+                if (loopingCard) {
+                    loopingCard.classList.remove('looping');
+                    loopingCard = null;
+                    synth.cancel();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
