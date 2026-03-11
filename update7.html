@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>English Reader</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  background: #f7f8fa;
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.title {
+  text-align: center;
+  font-size: 32px;
+  font-weight: bold;
+  color: #2c3e50;
+  margin: 30px 0 6px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.2s;
+}
+.title.reading {
+  color: #007aff;
+}
+
+.title-sub {
+  text-align: center;
+  font-size: 13px;
+  color: #9aaabf;
+  margin-bottom: 22px;
+  letter-spacing: 0.02em;
+  min-height: 18px;
+}
+
+#voiceSelect {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  background: #fff;
+  outline: none;
+}
+
+#inputArea {
+  width: 100%;
+  height: 180px;
+  padding: 15px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  resize: vertical;
+  outline: none;
+  background: white;
+}
+
+#goBtn {
+  width: 100%;
+  padding: 14px;
+  font-size: 18px;
+  font-weight: 600;
+  background: #007aff;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  margin: 12px 0 25px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#goBtn:active { opacity: 0.82; }
+
+#result {
+  font-size: 18px;
+}
+
+.sentence {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px 10px 8px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  background: #fff;
+  border: 1px solid #eee;
+  transition: background 0.2s, border-color 0.2s;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sentence.active {
+  background: #e8f4ff;
+  border-color: #007aff;
+}
+
+.speaker {
+  margin-right: 10px;
+  font-size: 20px;
+  user-select: none;
+  flex-shrink: 0;
+  padding-top: 5px;
+  line-height: 1;
+}
+
+.words-container {
+  display: flex;
+  flex-wrap: wrap;
+  flex: 1;
+  align-items: flex-start;
+}
+
+.word-unit {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 3px;
+  margin-bottom: 5px;
+}
+
+.word-text {
+  font-size: 17px;
+  cursor: pointer;
+  padding: 1px 3px;
+  border-radius: 4px;
+  line-height: 1.5;
+  color: #2c3e50;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  word-break: break-word;
+}
+
+.word-text.active {
+  background: #ffeb3b;
+  font-weight: 600;
+}
+
+.word-ipa {
+  font-size: 12px;
+  color: #6e92c8;
+  line-height: 1.4;
+  margin-top: 1px;
+  text-align: center;
+  letter-spacing: 0.01em;
+  min-height: 17px;
+}
+</style>
+</head>
+
+<body>
+  <div class="title" id="titleEl">English Reader</div>
+  <div class="title-sub" id="titleHint">▶ 点击标题朗读全文 &nbsp;·&nbsp; 再次点击停止</div>
+
+  <select id="voiceSelect"></select>
+
+  <textarea id="inputArea" placeholder="Paste your English text here..."></textarea>
+  <button id="goBtn">Go</button>
+  <div id="result"></div>
+
+<script>
+const inputArea  = document.getElementById('inputArea');
+const goBtn      = document.getElementById('goBtn');
+const result     = document.getElementById('result');
+const voiceSelect= document.getElementById('voiceSelect');
+const titleEl    = document.getElementById('titleEl');
+const titleHint  = document.getElementById('titleHint');
+
+let allVoices = [];
+let currentUtterance = null;
+let isReadingAll = false;
+let readAllDivs  = [];
+
+/* ———————————— Wake Lock ———————————— */
+let wakeLock = null;
+async function requestWakeLock() {
+  try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
+}
+document.addEventListener('visibilitychange', () => {
+  if (wakeLock && document.visibilityState === 'visible') requestWakeLock();
+});
+window.addEventListener('load', requestWakeLock);
+
+/* ———————————— IPA Dictionary (American English) ———————————— */
+const ipaDict = {
+  // Articles / Determiners
+  'the':'ðə','a':'ə','an':'æn',
+  // Conjunctions / Prepositions
+  'and':'ænd','or':'ɔːr','but':'bʌt','nor':'nɔːr','for':'fɔːr','yet':'jɛt','so':'soʊ',
+  'in':'ɪn','on':'ɑːn','at':'æt','to':'tuː','of':'əv','off':'ɔːf',
+  'by':'baɪ','up':'ʌp','as':'æz','if':'ɪf',
+  'into':'ˈɪntuː','onto':'ˈɑːntuː','from':'frəm',
+  'with':'wɪð','about':'əˈbaʊt','over':'ˈoʊvər',
+  'after':'ˈæftər','before':'bɪˈfɔːr','between':'bɪˈtwiːn',
+  'through':'θruː','during':'ˈdʊrɪŋ','against':'əˈɡɛnst',
+  'without':'wɪˈðaʊt','within':'wɪˈðɪn','among':'əˈmʌŋ',
+  'around':'əˈraʊnd','beyond':'biˈɑːnd','under':'ˈʌndər',
+  'above':'əˈbʌv','below':'bɪˈloʊ','beside':'bɪˈsaɪd',
+  'behind':'bɪˈhaɪnd','beneath':'bɪˈniːθ','across':'əˈkrɔːs',
+  'along':'əˈlɔːŋ','near':'nɪr','since':'sɪns','until':'ʌnˈtɪl',
+  'while':'waɪl','although':'ɔːlˈðoʊ','because':'bɪˈkɔːz',
+  'though':'ðoʊ','whether':'ˈwɛðər','unless':'ʌnˈlɛs',
+  'when':'wɛn','where':'wɛr','which':'wɪtʃ',
+  'who':'huː','whom':'huːm','whose':'huːz','that':'ðæt',
+  'than':'ðæn','then':'ðɛn','what':'wʌt','how':'haʊ','why':'waɪ',
+  'both':'boʊθ','either':'ˈiːðər','neither':'ˈniːðər',
+  'each':'iːtʃ','every':'ˈɛvri','all':'ɔːl','any':'ˈɛni',
+  'some':'sʌm','no':'noʊ','few':'fjuː','many':'ˈmɛni',
+  'much':'mʌtʃ','more':'mɔːr','most':'moʊst','less':'lɛs','least':'liːst',
+  'own':'oʊn','other':'ˈʌðər','another':'əˈnʌðər',
+  'such':'sʌtʃ','same':'seɪm','rather':'ˈræðər',
+  // Pronouns
+  'i':'aɪ','me':'miː','my':'maɪ','mine':'maɪn','myself':'maɪˈsɛlf',
+  'you':'juː','your':'jɔːr','yours':'jɔːrz','yourself':'jɔːrˈsɛlf',
+  'he':'hiː','him':'hɪm','his':'hɪz','himself':'hɪmˈsɛlf',
+  'she':'ʃiː','her':'hɜːr','hers':'hɜːrz','herself':'hɜːrˈsɛlf',
+  'it':'ɪt','its':'ɪts','itself':'ɪtˈsɛlf',
+  'we':'wiː','us':'ʌs','our':'aʊər','ours':'aʊərz','ourselves':'aʊərˈsɛlvz',
+  'they':'ðeɪ','them':'ðɛm','their':'ðɛr','theirs':'ðɛrz','themselves':'ðɛmˈsɛlvz',
+  'this':'ðɪs','these':'ðiːz','those':'ðoʊz',
+  'one':'wʌn','anyone':'ˈɛniwʌn','someone':'ˈsʌmwʌn','everyone':'ˈɛvriwʌn',
+  'anything':'ˈɛniθɪŋ','something':'ˈsʌmθɪŋ','everything':'ˈɛvriθɪŋ','nothing':'ˈnʌθɪŋ',
+  'anywhere':'ˈɛniwɛr','somewhere':'ˈsʌmwɛr','everywhere':'ˈɛvriwɛr','nowhere':'ˈnoʊwɛr',
+  // Auxiliary / Modal verbs
+  'be':'biː','am':'æm','is':'ɪz','are':'ɑːr','was':'wɑːz','were':'wɜːr',
+  'been':'bɪn','being':'ˈbiːɪŋ',
+  'have':'hæv','has':'hæz','had':'hæd','having':'ˈhævɪŋ',
+  'do':'duː','does':'dʌz','did':'dɪd','done':'dʌn','doing':'ˈduːɪŋ',
+  'will':'wɪl','would':'wʊd','shall':'ʃæl','should':'ʃʊd',
+  'may':'meɪ','might':'maɪt','can':'kæn','could':'kʊd',
+  'must':'mʌst','need':'niːd','ought':'ɔːt','dare':'dɛr',
+  // Core verbs
+  'say':'seɪ','says':'sɛz','said':'sɛd','saying':'ˈseɪɪŋ',
+  'get':'ɡɛt','gets':'ɡɛts','got':'ɡɑːt','gotten':'ˈɡɑːtən','getting':'ˈɡɛtɪŋ',
+  'make':'meɪk','makes':'meɪks','made':'meɪd','making':'ˈmeɪkɪŋ',
+  'go':'ɡoʊ','goes':'ɡoʊz','went':'wɛnt','gone':'ɡɔːn','going':'ˈɡoʊɪŋ',
+  'know':'noʊ','knows':'noʊz','knew':'njuː','known':'noʊn','knowing':'ˈnoʊɪŋ',
+  'take':'teɪk','takes':'teɪks','took':'tʊk','taken':'ˈteɪkən','taking':'ˈteɪkɪŋ',
+  'see':'siː','sees':'siːz','saw':'sɔː','seen':'siːn','seeing':'ˈsiːɪŋ',
+  'come':'kʌm','comes':'kʌmz','came':'keɪm','coming':'ˈkʌmɪŋ',
+  'think':'θɪŋk','thinks':'θɪŋks','thought':'θɔːt','thinking':'ˈθɪŋkɪŋ',
+  'look':'lʊk','looks':'lʊks','looked':'lʊkt','looking':'ˈlʊkɪŋ',
+  'want':'wɑːnt','wants':'wɑːnts','wanted':'ˈwɑːntɪd','wanting':'ˈwɑːntɪŋ',
+  'give':'ɡɪv','gives':'ɡɪvz','gave':'ɡeɪv','given':'ˈɡɪvən','giving':'ˈɡɪvɪŋ',
+  'use':'juːz','uses':'ˈjuːzɪz','used':'juːzd','using':'ˈjuːzɪŋ',
+  'find':'faɪnd','finds':'faɪndz','found':'faʊnd','finding':'ˈfaɪndɪŋ',
+  'tell':'tɛl','tells':'tɛlz','told':'toʊld','telling':'ˈtɛlɪŋ',
+  'ask':'æsk','asks':'æsks','asked':'æskt','asking':'ˈæskɪŋ',
+  'seem':'siːm','seems':'siːmz','seemed':'siːmd','seeming':'ˈsiːmɪŋ',
+  'feel':'fiːl','feels':'fiːlz','felt':'fɛlt','feeling':'ˈfiːlɪŋ',
+  'try':'traɪ','tries':'traɪz','tried':'traɪd','trying':'ˈtraɪɪŋ',
+  'leave':'liːv','leaves':'liːvz','left':'lɛft','leaving':'ˈliːvɪŋ',
+  'call':'kɔːl','calls':'kɔːlz','called':'kɔːld','calling':'ˈkɔːlɪŋ',
+  'keep':'kiːp','keeps':'kiːps','kept':'kɛpt','keeping':'ˈkiːpɪŋ',
+  'let':'lɛt','lets':'lɛts','letting':'ˈlɛtɪŋ',
+  'begin':'bɪˈɡɪn','began':'bɪˈɡæn','begun':'bɪˈɡʌn','beginning':'bɪˈɡɪnɪŋ',
+  'show':'ʃoʊ','shows':'ʃoʊz','showed':'ʃoʊd','shown':'ʃoʊn','showing':'ˈʃoʊɪŋ',
+  'hear':'hɪr','hears':'hɪrz','heard':'hɜːrd','hearing':'ˈhɪrɪŋ',
+  'play':'pleɪ','plays':'pleɪz','played':'pleɪd','playing':'ˈpleɪɪŋ',
+  'run':'rʌn','runs':'rʌnz','ran':'ræn','running':'ˈrʌnɪŋ',
+  'move':'muːv','moves':'muːvz','moved':'muːvd','moving':'ˈmuːvɪŋ',
+  'live':'lɪv','lives':'lɪvz','lived':'lɪvd','living':'ˈlɪvɪŋ',
+  'believe':'bɪˈliːv','believes':'bɪˈliːvz','believed':'bɪˈliːvd','believing':'bɪˈliːvɪŋ',
+  'hold':'hoʊld','holds':'hoʊldz','held':'hɛld','holding':'ˈhoʊldɪŋ',
+  'bring':'brɪŋ','brings':'brɪŋz','brought':'brɔːt','bringing':'ˈbrɪŋɪŋ',
+  'happen':'ˈhæpən','happens':'ˈhæpənz','happened':'ˈhæpənd','happening':'ˈhæpənɪŋ',
+  'write':'raɪt','writes':'raɪts','wrote':'roʊt','written':'ˈrɪtən','writing':'ˈraɪtɪŋ',
+  'provide':'prəˈvaɪd','provides':'prəˈvaɪdz','provided':'prəˈvaɪdɪd','providing':'prəˈvaɪdɪŋ',
+  'sit':'sɪt','sits':'sɪts','sat':'sæt','sitting':'ˈsɪtɪŋ',
+  'stand':'stænd','stands':'stændz','stood':'stʊd','standing':'ˈstændɪŋ',
+  'lose':'luːz','loses':'ˈluːzɪz','lost':'lɔːst','losing':'ˈluːzɪŋ',
+  'pay':'peɪ','pays':'peɪz','paid':'peɪd','paying':'ˈpeɪɪŋ',
+  'meet':'miːt','meets':'miːts','met':'mɛt','meeting':'ˈmiːtɪŋ',
+  'include':'ɪnˈkluːd','includes':'ɪnˈkluːdz','included':'ɪnˈkluːdɪd','including':'ɪnˈkluːdɪŋ',
+  'continue':'kənˈtɪnjuː','continues':'kənˈtɪnjuːz','continued':'kənˈtɪnjuːd',
+  'set':'sɛt','sets':'sɛts','setting':'ˈsɛtɪŋ',
+  'learn':'lɜːrn','learns':'lɜːrnz','learned':'lɜːrnd','learning':'ˈlɜːrnɪŋ',
+  'change':'tʃeɪndʒ','changes':'ˈtʃeɪndʒɪz','changed':'tʃeɪndʒd','changing':'ˈtʃeɪndʒɪŋ',
+  'lead':'liːd','leads':'liːdz','led':'lɛd','leading':'ˈliːdɪŋ',
+  'understand':'ˌʌndərˈstænd','understood':'ˌʌndərˈstʊd','understanding':'ˌʌndərˈstændɪŋ',
+  'watch':'wɑːtʃ','watches':'ˈwɑːtʃɪz','watched':'wɑːtʃt','watching':'ˈwɑːtʃɪŋ',
+  'follow':'ˈfɑːloʊ','follows':'ˈfɑːloʊz','followed':'ˈfɑːloʊd','following':'ˈfɑːloʊɪŋ',
+  'stop':'stɑːp','stops':'stɑːps','stopped':'stɑːpt','stopping':'ˈstɑːpɪŋ',
+  'create':'kriˈeɪt','creates':'kriˈeɪts','created':'kriˈeɪtɪd','creating':'kriˈeɪtɪŋ',
+  'speak':'spiːk','speaks':'spiːks','spoke':'spoʊk','spoken':'ˈspoʊkən','speaking':'ˈspiːkɪŋ',
+  'read':'riːd','reads':'riːdz','reading':'ˈriːdɪŋ',
+  'spend':'spɛnd','spends':'spɛndz','spent':'spɛnt','spending':'ˈspɛndɪŋ',
+  'grow':'ɡroʊ','grows':'ɡroʊz','grew':'ɡruː','grown':'ɡroʊn','growing':'ˈɡroʊɪŋ',
+  'open':'ˈoʊpən','opens':'ˈoʊpənz','opened':'ˈoʊpənd','opening':'ˈoʊpənɪŋ',
+  'walk':'wɔːk','walks':'wɔːks','walked':'wɔːkt','walking':'ˈwɔːkɪŋ',
+  'win':'wɪn','wins':'wɪnz','won':'wʌn','winning':'ˈwɪnɪŋ',
+  'offer':'ˈɔːfər','offers':'ˈɔːfərz','offered':'ˈɔːfərd','offering':'ˈɔːfərɪŋ',
+  'remember':'rɪˈmɛmbər','remembered':'rɪˈmɛmbərd',
+  'love':'lʌv','loves':'lʌvz','loved':'lʌvd','loving':'ˈlʌvɪŋ',
+  'consider':'kənˈsɪdər','considers':'kənˈsɪdərz','considered':'kənˈsɪdərd',
+  'appear':'əˈpɪr','appears':'əˈpɪrz','appeared':'əˈpɪrd','appearing':'əˈpɪrɪŋ',
+  'buy':'baɪ','buys':'baɪz','bought':'bɔːt','buying':'ˈbaɪɪŋ',
+  'wait':'weɪt','waits':'weɪts','waited':'ˈweɪtɪd','waiting':'ˈweɪtɪŋ',
+  'serve':'sɜːrv','serves':'sɜːrvz','served':'sɜːrvd','serving':'ˈsɜːrvɪŋ',
+  'die':'daɪ','dies':'daɪz','died':'daɪd','dying':'ˈdaɪɪŋ',
+  'send':'sɛnd','sends':'sɛndz','sent':'sɛnt','sending':'ˈsɛndɪŋ',
+  'expect':'ɪkˈspɛkt','expects':'ɪkˈspɛkts','expected':'ɪkˈspɛktɪd',
+  'build':'bɪld','builds':'bɪldz','built':'bɪlt','building':'ˈbɪldɪŋ',
+  'stay':'steɪ','stays':'steɪz','stayed':'steɪd','staying':'ˈsteɪɪŋ',
+  'fall':'fɔːl','falls':'fɔːlz','fell':'fɛl','fallen':'ˈfɔːlən','falling':'ˈfɔːlɪŋ',
+  'cut':'kʌt','cuts':'kʌts','cutting':'ˈkʌtɪŋ',
+  'reach':'riːtʃ','reaches':'ˈriːtʃɪz','reached':'riːtʃt','reaching':'ˈriːtʃɪŋ',
+  'kill':'kɪl','kills':'kɪlz','killed':'kɪld','killing':'ˈkɪlɪŋ',
+  'remain':'rɪˈmeɪn','remains':'rɪˈmeɪnz','remained':'rɪˈmeɪnd',
+  'suggest':'səɡˈdʒɛst','suggests':'səɡˈdʒɛsts','suggested':'səɡˈdʒɛstɪd',
+  'raise':'reɪz','raises':'ˈreɪzɪz','raised':'reɪzd','raising':'ˈreɪzɪŋ',
+  'pass':'pæs','passes':'ˈpæsɪz','passed':'pæst','passing':'ˈpæsɪŋ',
+  'sell':'sɛl','sells':'sɛlz','sold':'soʊld','selling':'ˈsɛlɪŋ',
+  'require':'rɪˈkwaɪər','requires':'rɪˈkwaɪərz','required':'rɪˈkwaɪərd',
+  'report':'rɪˈpɔːrt','reports':'rɪˈpɔːrts','reported':'rɪˈpɔːrtɪd','reporting':'rɪˈpɔːrtɪŋ',
+  'decide':'dɪˈsaɪd','decides':'dɪˈsaɪdz','decided':'dɪˈsaɪdɪd',
+  'pull':'pʊl','pulls':'pʊlz','pulled':'pʊld','pulling':'ˈpʊlɪŋ',
+  'push':'pʊʃ','pushes':'ˈpʊʃɪz','pushed':'pʊʃt','pushing':'ˈpʊʃɪŋ',
+  'turn':'tɜːrn','turns':'tɜːrnz','turned':'tɜːrnd','turning':'ˈtɜːrnɪŋ',
+  'help':'hɛlp','helps':'hɛlps','helped':'hɛlpt','helping':'ˈhɛlpɪŋ',
+  'start':'stɑːrt','starts':'stɑːrts','started':'ˈstɑːrtɪd','starting':'ˈstɑːrtɪŋ',
+  'put':'pʊt','puts':'pʊts','putting':'ˈpʊtɪŋ',
+  'eat':'iːt','eats':'iːts','ate':'eɪt','eaten':'ˈiːtən','eating':'ˈiːtɪŋ',
+  'accept':'əkˈsɛpt','accepted':'əkˈsɛptɪd','accepting':'əkˈsɛptɪŋ',
+  'achieve':'əˈtʃiːv','achieves':'əˈtʃiːvz','achieved':'əˈtʃiːvd',
+  'add':'æd','adds':'ædz','added':'ˈædɪd','adding':'ˈædɪŋ',
+  'allow':'əˈlaʊ','allows':'əˈlaʊz','allowed':'əˈlaʊd','allowing':'əˈlaʊɪŋ',
+  'apply':'əˈplaɪ','applies':'əˈplaɪz','applied':'əˈplaɪd','applying':'əˈplaɪɪŋ',
+  'approach':'əˈproʊtʃ','approaches':'əˈproʊtʃɪz','approached':'əˈproʊtʃt',
+  'argue':'ˈɑːrɡjuː','argues':'ˈɑːrɡjuːz','argued':'ˈɑːrɡjuːd',
+  'avoid':'əˈvɔɪd','avoids':'əˈvɔɪdz','avoided':'əˈvɔɪdɪd','avoiding':'əˈvɔɪdɪŋ',
+  'become':'bɪˈkʌm','becomes':'bɪˈkʌmz','became':'bɪˈkeɪm','becoming':'bɪˈkʌmɪŋ',
+  'break':'breɪk','breaks':'breɪks','broke':'broʊk','broken':'ˈbroʊkən','breaking':'ˈbreɪkɪŋ',
+  'carry':'ˈkæri','carries':'ˈkæriz','carried':'ˈkærid','carrying':'ˈkæriɪŋ',
+  'cause':'kɔːz','causes':'ˈkɔːzɪz','caused':'kɔːzd','causing':'ˈkɔːzɪŋ',
+  'choose':'tʃuːz','chooses':'ˈtʃuːzɪz','chose':'tʃoʊz','chosen':'ˈtʃoʊzən',
+  'close':'kloʊz','closes':'ˈkloʊzɪz','closed':'kloʊzd','closing':'ˈkloʊzɪŋ',
+  'compare':'kəmˈpɛr','compared':'kəmˈpɛrd','comparing':'kəmˈpɛrɪŋ',
+  'contain':'kənˈteɪn','contains':'kənˈteɪnz','contained':'kənˈteɪnd',
+  'describe':'dɪˈskraɪb','describes':'dɪˈskraɪbz','described':'dɪˈskraɪbd',
+  'determine':'dɪˈtɜːrmɪn','determined':'dɪˈtɜːrmɪnd',
+  'develop':'dɪˈvɛləp','develops':'dɪˈvɛləps','developed':'dɪˈvɛləpt','developing':'dɪˈvɛləpɪŋ',
+  'discuss':'dɪˈskʌs','discusses':'dɪˈskʌsɪz','discussed':'dɪˈskʌst',
+  'establish':'ɪˈstæblɪʃ','established':'ɪˈstæblɪʃt',
+  'exist':'ɪɡˈzɪst','exists':'ɪɡˈzɪsts','existed':'ɪɡˈzɪstɪd','existing':'ɪɡˈzɪstɪŋ',
+  'explain':'ɪkˈspleɪn','explains':'ɪkˈspleɪnz','explained':'ɪkˈspleɪnd',
+  'fail':'feɪl','fails':'feɪlz','failed':'feɪld','failing':'ˈfeɪlɪŋ',
+  'focus':'ˈfoʊkəs','focuses':'ˈfoʊkəsɪz','focused':'ˈfoʊkəst',
+  'force':'fɔːrs','forces':'ˈfɔːrsɪz','forced':'fɔːrst',
+  'form':'fɔːrm','forms':'fɔːrmz','formed':'fɔːrmd','forming':'ˈfɔːrmɪŋ',
+  'improve':'ɪmˈpruːv','improves':'ɪmˈpruːvz','improved':'ɪmˈpruːvd',
+  'increase':'ɪnˈkriːs','increases':'ɪnˈkriːsɪz','increased':'ɪnˈkriːst',
+  'indicate':'ˈɪndɪkeɪt','indicates':'ˈɪndɪkeɪts','indicated':'ˈɪndɪkeɪtɪd',
+  'involve':'ɪnˈvɑːlv','involves':'ɪnˈvɑːlvz','involved':'ɪnˈvɑːlvd',
+  'maintain':'meɪnˈteɪn','maintains':'meɪnˈteɪnz','maintained':'meɪnˈteɪnd',
+  'mean':'miːn','means':'miːnz','meant':'mɛnt','meaning':'ˈmiːnɪŋ',
+  'mention':'ˈmɛnʃən','mentions':'ˈmɛnʃənz','mentioned':'ˈmɛnʃənd',
+  'note':'noʊt','notes':'noʊts','noted':'ˈnoʊtɪd','noting':'ˈnoʊtɪŋ',
+  'occur':'əˈkɜːr','occurs':'əˈkɜːrz','occurred':'əˈkɜːrd','occurring':'əˈkɜːrɪŋ',
+  'perform':'pərˈfɔːrm','performs':'pərˈfɔːrmz','performed':'pərˈfɔːrmd',
+  'present':'prɪˈzɛnt','prevents':'prɪˈvɛnts','prevented':'prɪˈvɛntɪd',
+  'prevent':'prɪˈvɛnt',
+  'produce':'prəˈduːs','produces':'prəˈduːsɪz','produced':'prəˈduːst',
+  'protect':'prəˈtɛkt','protects':'prəˈtɛkts','protected':'prəˈtɛktɪd',
+  'prove':'pruːv','proves':'pruːvz','proved':'pruːvd','proven':'ˈpruːvən',
+  'reduce':'rɪˈduːs','reduces':'rɪˈduːsɪz','reduced':'rɪˈduːst',
+  'reflect':'rɪˈflɛkt','reflects':'rɪˈflɛkts','reflected':'rɪˈflɛktɪd',
+  'relate':'rɪˈleɪt','relates':'rɪˈleɪts','related':'rɪˈleɪtɪd',
+  'represent':'ˌrɛprɪˈzɛnt','represents':'ˌrɛprɪˈzɛnts','represented':'ˌrɛprɪˈzɛntɪd',
+  'return':'rɪˈtɜːrn','returns':'rɪˈtɜːrnz','returned':'rɪˈtɜːrnd',
+  'save':'seɪv','saves':'seɪvz','saved':'seɪvd','saving':'ˈseɪvɪŋ',
+  'seek':'siːk','seeks':'siːks','sought':'sɔːt','seeking':'ˈsiːkɪŋ',
+  'share':'ʃɛr','shares':'ʃɛrz','shared':'ʃɛrd','sharing':'ˈʃɛrɪŋ',
+  'solve':'sɑːlv','solves':'sɑːlvz','solved':'sɑːlvd',
+  'suffer':'ˈsʌfər','suffers':'ˈsʌfərz','suffered':'ˈsʌfərd','suffering':'ˈsʌfərɪŋ',
+  'treat':'triːt','treats':'triːts','treated':'ˈtriːtɪd','treating':'ˈtriːtɪŋ',
+  'test':'tɛst','tests':'tɛsts','tested':'ˈtɛstɪd','testing':'ˈtɛstɪŋ',
+  'check':'tʃɛk','checks':'tʃɛks','checked':'tʃɛkt','checking':'ˈtʃɛkɪŋ',
+  'enter':'ˈɛntər','exit':'ˈɛɡzɪt','search':'sɜːrtʃ','filter':'ˈfɪltər',
+  'click':'klɪk','press':'prɛs','type':'taɪp','sort':'sɔːrt',
+  // Common Nouns
+  'time':'taɪm','year':'jɪr','people':'ˈpiːpəl','way':'weɪ',
+  'day':'deɪ','man':'mæn','woman':'ˈwʊmən','child':'tʃaɪld',
+  'world':'wɜːrld','life':'laɪf','hand':'hænd','part':'pɑːrt',
+  'place':'pleɪs','case':'keɪs','week':'wiːk','company':'ˈkʌmpəni',
+  'system':'ˈsɪstəm','program':'ˈproʊɡræm','question':'ˈkwɛstʃən',
+  'work':'wɜːrk','government':'ˈɡʌvərnmənt','number':'ˈnʌmbər',
+  'night':'naɪt','point':'pɔɪnt','home':'hoʊm','water':'ˈwɔːtər',
+  'room':'ruːm','mother':'ˈmʌðər','area':'ˈɛriə','money':'ˈmʌni',
+  'story':'ˈstɔːri','fact':'fækt','month':'mʌnθ','lot':'lɑːt',
+  'right':'raɪt','study':'ˈstʌdi','book':'bʊk','eye':'aɪ',
+  'job':'dʒɑːb','word':'wɜːrd','business':'ˈbɪznɪs','issue':'ˈɪʃuː',
+  'side':'saɪd','kind':'kaɪnd','head':'hɛd','house':'haʊs',
+  'service':'ˈsɜːrvɪs','friend':'frɛnd','father':'ˈfɑːðər','power':'ˈpaʊər',
+  'hour':'aʊər','game':'ɡeɪm','line':'laɪn','end':'ɛnd',
+  'name':'neɪm','thing':'θɪŋ','family':'ˈfæməli','body':'ˈbɑːdi',
+  'music':'ˈmjuːzɪk','color':'ˈkʌlər','food':'fuːd','car':'kɑːr',
+  'city':'ˈsɪti','school':'skuːl','country':'ˈkʌntri',
+  'door':'dɔːr','face':'feɪs','girl':'ɡɜːrl','boy':'bɔɪ',
+  'age':'eɪdʒ','art':'ɑːrt','air':'ɛr','earth':'ɜːrθ',
+  'light':'laɪt','heart':'hɑːrt','mind':'maɪnd','back':'bæk',
+  'health':'hɛlθ','idea':'aɪˈdiːə','information':'ˌɪnfərˈmeɪʃən',
+  'morning':'ˈmɔːrnɪŋ','afternoon':'ˌæftərˈnuːn','evening':'ˈiːvnɪŋ',
+  'today':'təˈdeɪ','tomorrow':'təˈmɑːroʊ','yesterday':'ˈjɛstərdeɪ',
+  'phone':'foʊn','computer':'kəmˈpjuːtər','internet':'ˈɪntərnɛt',
+  'email':'ˈiːmeɪl','website':'ˈwɛbsaɪt','app':'æp','data':'ˈdeɪtə',
+  'technology':'tɛkˈnɑːlədʒi','science':'ˈsaɪəns','history':'ˈhɪstəri',
+  'culture':'ˈkʌltʃər','language':'ˈlæŋɡwɪdʒ','society':'səˈsaɪəti',
+  'economy':'ɪˈkɑːnəmi','education':'ˌɛdʒʊˈkeɪʃən',
+  'environment':'ɪnˈvaɪrənmənt','community':'kəˈmjuːnɪti',
+  'state':'steɪt','problem':'ˈprɑːbləm','result':'rɪˈzʌlt',
+  'reason':'ˈriːzən','research':'ˈriːsɜːrtʃ',
+  'development':'dɪˈvɛləpmənt','experience':'ɪkˈspɪriəns',
+  'process':'ˈprɑːsɛs','level':'ˈlɛvəl','position':'pəˈzɪʃən',
+  'action':'ˈækʃən','amount':'əˈmaʊnt','control':'kənˈtroʊl',
+  'moment':'ˈmoʊmənt','sense':'sɛns','effect':'ɪˈfɛkt',
+  'attention':'əˈtɛnʃən','decision':'dɪˈsɪʒən','message':'ˈmɛsɪdʒ',
+  'situation':'ˌsɪtʃuˈeɪʃən','relationship':'rɪˈleɪʃənʃɪp',
+  'difference':'ˈdɪfrəns','opportunity':'ˌɑːpərˈtjuːnɪti',
+  'management':'ˈmænɪdʒmənt','evidence':'ˈɛvɪdəns','chance':'tʃæns',
+  'men':'mɛn','women':'ˈwɪmɪn','children':'ˈtʃɪldrən',
+  'days':'deɪz','years':'jɪrz','times':'taɪmz','things':'θɪŋz',
+  'words':'wɜːrdz','hands':'hændz','eyes':'aɪz','feet':'fiːt',
+  'legs':'lɛɡz','arms':'ɑːrmz','ears':'ɪrz',
+  'tree':'triː','trees':'triːz','flower':'ˈflaʊər','sun':'sʌn',
+  'moon':'muːn','star':'stɑːr','sky':'skaɪ','sea':'siː',
+  'ocean':'ˈoʊʃən','river':'ˈrɪvər','mountain':'ˈmaʊntən',
+  'road':'roʊd','street':'striːt','town':'taʊn','village':'ˈvɪlɪdʒ',
+  'nation':'ˈneɪʃən','war':'wɔːr','peace':'piːs','law':'lɔː',
+  'court':'kɔːrt','police':'pəˈliːs','army':'ˈɑːrmi',
+  'death':'dɛθ','birth':'bɜːrθ','hope':'hoʊp',
+  'dream':'driːm','fear':'fɪr','pain':'peɪn','joy':'dʒɔɪ',
+  'smile':'smaɪl','laugh':'læf','voice':'vɔɪs',
+  'sound':'saʊnd','song':'sɔːŋ',
+  'picture':'ˈpɪktʃər','photo':'ˈfoʊtoʊ','video':'ˈvɪdioʊ',
+  'news':'njuːz','office':'ˈɔːfɪs','market':'ˈmɑːrkɪt',
+  'price':'praɪs','cost':'kɔːst','trade':'treɪd','bank':'bæŋk',
+  'stock':'stɑːk','tax':'tæks','income':'ˈɪnkʌm','loss':'lɔːs',
+  'profit':'ˈprɑːfɪt','plan':'plæn','goal':'ɡoʊl',
+  'team':'tiːm','group':'ɡruːp','member':'ˈmɛmbər','leader':'ˈliːdər',
+  'doctor':'ˈdɑːktər','teacher':'ˈtiːtʃər','student':'ˈstuːdənt',
+  'player':'ˈpleɪər','worker':'ˈwɜːrkər','writer':'ˈraɪtər',
+  'artist':'ˈɑːrtɪst','president':'ˈprɛzɪdənt','judge':'dʒʌdʒ',
+  'king':'kɪŋ','queen':'kwiːn','son':'sʌn','daughter':'ˈdɔːtər',
+  'brother':'ˈbrʌðər','sister':'ˈsɪstər','husband':'ˈhʌzbənd',
+  'wife':'waɪf','baby':'ˈbeɪbi',
+  'window':'ˈwɪndoʊ','floor':'flɔːr','wall':'wɔːl',
+  'table':'ˈteɪbəl','chair':'tʃɛr','bed':'bɛd',
+  'kitchen':'ˈkɪtʃɪn','garden':'ˈɡɑːrdən','park':'pɑːrk',
+  'love':'lʌv','value':'ˈvæljuː','values':'ˈvæljuːz',
+  // Adjectives
+  'good':'ɡʊd','bad':'bæd','big':'bɪɡ','small':'smɔːl',
+  'large':'lɑːrdʒ','little':'ˈlɪtəl','long':'lɔːŋ','short':'ʃɔːrt',
+  'high':'haɪ','low':'loʊ','old':'oʊld','young':'jʌŋ',
+  'new':'njuː','early':'ˈɜːrli','late':'leɪt','hard':'hɑːrd',
+  'easy':'ˈiːzi','fast':'fæst','slow':'sloʊ','hot':'hɑːt',
+  'cold':'koʊld','warm':'wɔːrm','cool':'kuːl','dark':'dɑːrk',
+  'bright':'braɪt','clean':'kliːn','dirty':'ˈdɜːrti','dry':'draɪ',
+  'wet':'wɛt','heavy':'ˈhɛvi','rich':'rɪtʃ','poor':'pɔːr',
+  'strong':'strɔːŋ','weak':'wiːk','safe':'seɪf',
+  'dangerous':'ˈdeɪndʒərəs','beautiful':'ˈbjuːtɪfəl','ugly':'ˈʌɡli',
+  'happy':'ˈhæpi','sad':'sæd','angry':'ˈæŋɡri','afraid':'əˈfreɪd',
+  'tired':'ˈtaɪərd','sick':'sɪk','healthy':'ˈhɛlθi','dead':'dɛd',
+  'alive':'əˈlaɪv','free':'friː','busy':'ˈbɪzi','ready':'ˈrɛdi',
+  'sure':'ʃʊr','true':'truː','false':'fɔːls','real':'riːl',
+  'possible':'ˈpɑːsɪbəl','impossible':'ɪmˈpɑːsɪbəl',
+  'important':'ɪmˈpɔːrtənt','different':'ˈdɪfrənt',
+  'special':'ˈspɛʃəl','common':'ˈkɑːmən','certain':'ˈsɜːrtn',
+  'current':'ˈkɜːrənt','recent':'ˈriːsənt','simple':'ˈsɪmpəl',
+  'complete':'kəmˈpliːt','full':'fʊl','main':'meɪn','major':'ˈmeɪdʒər',
+  'general':'ˈdʒɛnərəl','public':'ˈpʌblɪk','private':'ˈpraɪvɪt',
+  'social':'ˈsoʊʃəl','human':'ˈhjuːmən','natural':'ˈnætʃərəl',
+  'national':'ˈnæʃənəl','local':'ˈloʊkəl','global':'ˈɡloʊbəl',
+  'available':'əˈveɪləbəl','financial':'faɪˈnænʃəl','medical':'ˈmɛdɪkəl',
+  'political':'pəˈlɪtɪkəl','specific':'spɪˈsɪfɪk','various':'ˈvɛriəs',
+  'able':'ˈeɪbəl','clear':'klɪr','final':'ˈfaɪnəl',
+  'past':'pæst','wrong':'rɔːŋ','third':'θɜːrd','second':'ˈsɛkənd',
+  'white':'waɪt','black':'blæk','red':'rɛd','blue':'bluː',
+  'green':'ɡriːn','yellow':'ˈjɛloʊ','brown':'braʊn','gray':'ɡreɪ',
+  'grey':'ɡreɪ','pink':'pɪŋk','orange':'ˈɔːrɪndʒ','purple':'ˈpɜːrpəl',
+  'entire':'ɪnˈtaɪər','further':'ˈfɜːrðər','nice':'naɪs',
+  'great':'ɡreɪt','huge':'hjuːdʒ','tiny':'ˈtaɪni','wide':'waɪd',
+  'deep':'diːp','flat':'flæt','round':'raʊnd','sharp':'ʃɑːrp',
+  'soft':'sɔːft','loud':'laʊd','quiet':'ˈkwaɪɪt','sweet':'swiːt',
+  'fresh':'frɛʃ','raw':'rɔː','perfect':'ˈpɜːrfɪkt','correct':'kəˈrɛkt',
+  'normal':'ˈnɔːrməl','average':'ˈævərɪdʒ','actual':'ˈæktʃuəl',
+  'original':'əˈrɪdʒɪnəl','popular':'ˈpɑːpjələr','modern':'ˈmɑːdərn',
+  'previous':'ˈpriːviəs','next':'nɛkst','last':'læst','first':'fɜːrst',
+  'interesting':'ˈɪntrɪstɪŋ','boring':'ˈbɔːrɪŋ','exciting':'ɪkˈsaɪtɪŋ',
+  'amazing':'əˈmeɪzɪŋ','terrible':'ˈtɛrɪbəl','wonderful':'ˈwʌndərfəl',
+  'serious':'ˈsɪriəs','careful':'ˈkɛrfəl','useful':'ˈjuːsfəl',
+  'ancient':'ˈeɪnʃənt','sudden':'ˈsʌdən','secret':'ˈsiːkrɪt',
+  'strange':'streɪndʒ','familiar':'fəˈmɪliər','obvious':'ˈɑːbviəs',
+  'entire':'ɪnˈtaɪər','certain':'ˈsɜːrtn','similar':'ˈsɪmɪlər',
+  // Adverbs
+  'not':'nɑːt','also':'ˈɔːlsoʊ','very':'ˈvɛri','well':'wɛl',
+  'just':'dʒʌst','now':'naʊ','only':'ˈoʊnli','still':'stɪl',
+  'even':'ˈiːvən','too':'tuː','here':'hɪr','there':'ðɛr',
+  'down':'daʊn','out':'aʊt','away':'əˈweɪ',
+  'never':'ˈnɛvər','always':'ˈɔːlweɪz','sometimes':'ˈsʌmtaɪmz',
+  'often':'ˈɔːfən','already':'ɔːlˈrɛdi','again':'əˈɡɛn',
+  'quite':'kwaɪt','really':'ˈriːəli','actually':'ˈæktʃuəli',
+  'probably':'ˈprɑːbəbli','certainly':'ˈsɜːrtnli','exactly':'ɪɡˈzæktli',
+  'together':'təˈɡɛðər','however':'haʊˈɛvər','almost':'ˈɔːlmoʊst',
+  'especially':'ɪˈspɛʃəli','enough':'ɪˈnʌf','simply':'ˈsɪmpli',
+  'therefore':'ˈðɛrfɔːr','perhaps':'pərˈhæps',
+  'recently':'ˈriːsəntli','currently':'ˈkɜːrəntli',
+  'quickly':'ˈkwɪkli','slowly':'ˈsloʊli','suddenly':'ˈsʌdənli',
+  'finally':'ˈfaɪnəli','clearly':'ˈklɪrli','directly':'dɪˈrɛktli',
+  'easily':'ˈiːzɪli','generally':'ˈdʒɛnərəli','likely':'ˈlaɪkli',
+  'mainly':'ˈmeɪnli','nearly':'ˈnɪrli','particularly':'pərˈtɪkjələrli',
+  'personally':'ˈpɜːrsənəli','previously':'ˈpriːviəsli',
+  'properly':'ˈprɑːpərli','seriously':'ˈsɪriəsli',
+  'significantly':'sɪɡˈnɪfɪkəntli','slightly':'ˈslaɪtli',
+  'strongly':'ˈstrɔːŋli','truly':'ˈtruːli','usually':'ˈjuːʒuəli',
+  'widely':'ˈwaɪdli','immediately':'ɪˈmiːdiətli',
+  'completely':'kəmˈpliːtli','absolutely':'ˈæbsəluːtli',
+  'carefully':'ˈkɛrfəli','deeply':'ˈdiːpli','fairly':'ˈfɛrli',
+  'highly':'ˈhaɪli','mostly':'ˈmoʊstli','partly':'ˈpɑːrtli',
+  'perfectly':'ˈpɜːrfɪktli','possibly':'ˈpɑːsɪbli',
+  // Numbers
+  'zero':'ˈzɪroʊ','two':'tuː','three':'θriː','four':'fɔːr',
+  'five':'faɪv','six':'sɪks','seven':'ˈsɛvən','eight':'eɪt',
+  'nine':'naɪn','ten':'tɛn','eleven':'ɪˈlɛvən','twelve':'twɛlv',
+  'thirteen':'ˌθɜːrˈtiːn','fourteen':'ˌfɔːrˈtiːn','fifteen':'ˌfɪfˈtiːn',
+  'sixteen':'ˌsɪksˈtiːn','seventeen':'ˌsɛvənˈtiːn','eighteen':'ˌeɪˈtiːn',
+  'nineteen':'ˌnaɪnˈtiːn','twenty':'ˈtwɛnti','thirty':'ˈθɜːrti',
+  'forty':'ˈfɔːrti','fifty':'ˈfɪfti','sixty':'ˈsɪksti',
+  'seventy':'ˈsɛvənti','eighty':'ˈeɪti','ninety':'ˈnaɪnti',
+  'hundred':'ˈhʌndrəd','thousand':'ˈθaʊzənd','million':'ˈmɪljən','billion':'ˈbɪljən',
+  // Months & Days
+  'january':'ˈdʒænjuˌɛri','february':'ˈfɛbruˌɛri','march':'mɑːrtʃ',
+  'april':'ˈeɪprəl','june':'dʒuːn','july':'dʒuˈlaɪ',
+  'august':'ˈɔːɡəst','september':'sɛpˈtɛmbər','october':'ɑːkˈtoʊbər',
+  'november':'noʊˈvɛmbər','december':'dɪˈsɛmbər',
+  'monday':'ˈmʌndeɪ','tuesday':'ˈtuːzdeɪ','wednesday':'ˈwɛnzdeɪ',
+  'thursday':'ˈθɜːrzdeɪ','friday':'ˈfraɪdeɪ','saturday':'ˈsætərdeɪ','sunday':'ˈsʌndeɪ',
+  // Greetings / Discourse
+  'please':'pliːz','thank':'θæŋk','thanks':'θæŋks','sorry':'ˈsɑːri',
+  'yes':'jɛs','ok':'ˌoʊˈkeɪ','okay':'ˌoʊˈkeɪ',
+  'hello':'hɛˈloʊ','goodbye':'ˌɡʊdˈbaɪ','hi':'haɪ','hey':'heɪ',
+  'oh':'oʊ','ah':'ɑː','wow':'waʊ','well':'wɛl',
+  // Contractions
+  "it's":'ɪts',"i'm":'aɪm',"i've":'aɪv',"i'll":'aɪl',"i'd":'aɪd',
+  "you're":'jɔːr',"you've":'juːv',"you'll":'juːl',"you'd":'juːd',
+  "he's":'hiːz',"she's":'ʃiːz',"we're":'wɪər',"we've":'wiːv',
+  "we'll":'wiːl',"they're":'ðɛər',"they've":'ðeɪv',"they'll":'ðeɪl',
+  "that's":'ðæts',"there's":'ðɛrz',"what's":'wʌts',
+  "don't":'doʊnt',"doesn't":'ˈdʌzənt',"didn't":'ˈdɪdənt',
+  "can't":'kænt',"won't":'woʊnt',"wouldn't":'ˈwʊdənt',
+  "shouldn't":'ˈʃʊdənt',"couldn't":'ˈkʊdənt',"haven't":'ˈhævənt',
+  "hasn't":'ˈhæzənt',"hadn't":'ˈhædənt',"isn't":'ˈɪzənt',
+  "aren't":'ɑːrnt',"wasn't":'ˈwɑːzənt',"weren't":'wɜːrnt',
+  "let's":'lɛts',"who's":'huːz',"how's":'haʊz',"it'll":'ˈɪtəl',
+};
+
+/* ———————————— Voice Loading ———————————— */
+function loadVoices() {
+  allVoices = window.speechSynthesis.getVoices();
+  voiceSelect.innerHTML = '';
+  allVoices.forEach((voice, i) => {
+    if (voice.lang.includes('en')) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `${voice.name} (${voice.lang})`;
+      voiceSelect.appendChild(opt);
+    }
+  });
+  const samIdx = allVoices.findIndex(v => v.name.includes('Samantha') && v.lang.includes('en-US'));
+  if (samIdx !== -1) voiceSelect.value = samIdx;
+}
+function getSelectedVoice() {
+  return allVoices[voiceSelect.value] || allVoices.find(v => v.lang.includes('en-US'));
+}
+window.speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
+
+/* ———————————— Sentence Splitting (unchanged) ———————————— */
+function splitIntoRealSentences(text) {
+  const s = text.replace(/\s+/g, ' ').trim();
+  let t = s.replace(/(\d):(\d)/g, '$1⏱$2');
+  const protectPatterns = [
+    /\b([A-Z])\.([A-Z])\.([A-Z])\./gi,
+    /\b([A-Z])\.([A-Z])\./gi,
+    /\b[a-z]\.[a-z]\./gi,
+    /\b(Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\./gi
+  ];
+  protectPatterns.forEach(re => { t = t.replace(re, m => m.replace(/\./g, '•')); });
+  const parts = t.split(/(?<=[.!?])\s+/);
+  return parts.map(p => p.replace(/⏱/g, ':').replace(/•/g, '.').trim()).filter(Boolean);
+}
+
+/* ———————————— Go Button ———————————— */
+goBtn.addEventListener('click', () => {
+  const text = inputArea.value.trim();
+  if (!text) return;
+  stopSpeaking();
+  const sentences = splitIntoRealSentences(text);
+  renderResult(sentences);
+});
+
+/* ———————————— Title: Read All Sequentially ———————————— */
+titleEl.addEventListener('click', () => {
+  if (isReadingAll || window.speechSynthesis.speaking) {
+    stopSpeaking();
+    return;
+  }
+  const divs = Array.from(document.querySelectorAll('.sentence'));
+  if (divs.length === 0) {
+    const text = inputArea.value.trim();
+    if (!text) return;
+    const sentences = splitIntoRealSentences(text);
+    renderResult(sentences);
+    setTimeout(startReadAll, 60);
+    return;
+  }
+  startReadAll();
+});
+
+function startReadAll() {
+  readAllDivs = Array.from(document.querySelectorAll('.sentence'));
+  if (!readAllDivs.length) return;
+  isReadingAll = true;
+  titleEl.classList.add('reading');
+  titleHint.textContent = '⏸ 正在朗读… 点击停止';
+  clearHighlights();
+  readSentenceAt(0);
+}
+
+function readSentenceAt(index) {
+  if (!isReadingAll) return;
+  if (index >= readAllDivs.length) {
+    isReadingAll = false;
+    titleEl.classList.remove('reading');
+    titleHint.textContent = '▶ 点击标题朗读全文 · 再次点击停止';
+    clearHighlights();
+    return;
+  }
+  const sentEl = readAllDivs[index];
+  const text = sentEl.getAttribute('data-text');
+  clearHighlights();
+  sentEl.classList.add('active');
+  sentEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  const u = new SpeechSynthesisUtterance(text);
+  u.voice = getSelectedVoice();
+  u.rate = 0.96;
+  u.pitch = 1.0;
+
+  u.onend = () => {
+    if (!isReadingAll) return;
+    sentEl.classList.remove('active');
+    setTimeout(() => readSentenceAt(index + 1), 220);
+  };
+  u.onerror = (e) => {
+    if (!isReadingAll) return;
+    if (e.error === 'interrupted' || e.error === 'canceled') return;
+    sentEl.classList.remove('active');
+    setTimeout(() => readSentenceAt(index + 1), 300);
+  };
+
+  window.speechSynthesis.speak(u);
+  currentUtterance = u;
+}
+
+/* ———————————— Render Result ———————————— */
+function renderResult(segments) {
+  result.innerHTML = '';
+  segments.forEach(seg => {
+    const sentenceDiv = document.createElement('div');
+    sentenceDiv.className = 'sentence';
+    sentenceDiv.setAttribute('data-text', seg);
+
+    const speaker = document.createElement('div');
+    speaker.className = 'speaker';
+    speaker.textContent = '🔊';
+
+    const wordsDiv = document.createElement('div');
+    wordsDiv.className = 'words-container';
+
+    const tokens = seg.split(/\s+/).filter(Boolean);
+    tokens.forEach(token => {
+      const wordOnly = token.replace(/^[^a-zA-Z']+|[^a-zA-Z']+$/g, '').toLowerCase();
+      const ipa = ipaDict[wordOnly] || '';
+
+      const unit = document.createElement('span');
+      unit.className = 'word-unit';
+
+      const wText = document.createElement('span');
+      wText.className = 'word-text';
+      wText.textContent = token;
+      wText.addEventListener('click', (e) => {
+        e.stopPropagation();
+        speakWord(wordOnly || token, wText);
+      });
+
+      const wIPA = document.createElement('span');
+      wIPA.className = 'word-ipa';
+      wIPA.textContent = ipa;
+
+      unit.appendChild(wText);
+      unit.appendChild(wIPA);
+      wordsDiv.appendChild(unit);
+    });
+
+    sentenceDiv.appendChild(speaker);
+    sentenceDiv.appendChild(wordsDiv);
+    sentenceDiv.addEventListener('click', () => speakSentence(seg, sentenceDiv));
+    result.appendChild(sentenceDiv);
+  });
+}
+
+/* ———————————— Speaking Helpers ———————————— */
+function speakSentence(text, sentenceEl) {
+  stopSpeaking();
+  clearHighlights();
+  const u = new SpeechSynthesisUtterance(text);
+  u.voice = getSelectedVoice();
+  u.rate = 0.96;
+  u.pitch = 1.0;
+  sentenceEl.classList.add('active');
+  u.onend = () => sentenceEl.classList.remove('active');
+  window.speechSynthesis.speak(u);
+  currentUtterance = u;
+}
+
+function speakWord(word, wordEl) {
+  stopSpeaking();
+  clearHighlights();
+  wordEl.classList.add('active');
+  const u = new SpeechSynthesisUtterance(word);
+  u.voice = getSelectedVoice();
+  u.rate = 0.9;
+  window.speechSynthesis.speak(u);
+  currentUtterance = u;
+}
+
+function stopSpeaking() {
+  isReadingAll = false;
+  titleEl.classList.remove('reading');
+  titleHint.textContent = '▶ 点击标题朗读全文 · 再次点击停止';
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+  }
+  clearHighlights();
+}
+
+function clearHighlights() {
+  document.querySelectorAll('.sentence.active, .word-text.active')
+    .forEach(el => el.classList.remove('active'));
+}
+</script>
+</body>
+</html>
