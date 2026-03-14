@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English Reader</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            line-height: 1.5;
+            padding: 20px;
+            min-height: 100vh;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        /* ----------------新增：智能选取分离控制---------------- */
+        body.selecting-words .ipa {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body.selecting-ipas .word,
+        body.selecting-ipas .no-ipa-container,
+        body.selecting-ipas .chinese-text {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        /* --------------------------------------------------- */
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 20px 0;
+        }
+        
+        h1 {
+            font-size: 2.8rem;
+            font-weight: 700;
+            color: #1a56db;
+            margin-bottom: 8px;
+            cursor: pointer;
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        h1:hover {
+            background-color: rgba(26, 86, 219, 0.08);
+        }
+        
+        .input-section {
+            background-color: white;
+            border-radius: 18px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        }
+        
+        textarea {
+            width: 100%;
+            height: 150px;
+            border: 1px solid #d2d2d7;
+            border-radius: 12px;
+            padding: 18px;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            resize: vertical;
+            transition: border-color 0.2s;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #1a56db;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 15px;
+        }
+        
+        .go-btn {
+            background-color: #1a56db;
+            color: white;
+            border: none;
+            padding: 14px 40px;
+            border-radius: 12px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            width: 120px;
+        }
+        
+        .go-btn:hover {
+            background-color: #1546b8;
+        }
+        
+        .go-btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        .stats {
+            text-align: center;
+            color: #86868b;
+            font-size: 1rem;
+            margin-top: 10px;
+        }
+        
+        .output-section {
+            background-color: white;
+            border-radius: 18px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        }
+        
+        .sentences-container {
+            margin-top: 20px;
+        }
+        
+        .sentence-item {
+            margin-bottom: 25px;
+            padding: 20px;
+            border-radius: 14px;
+            border: 1px solid #f0f0f0;
+            transition: all 0.2s;
+            position: relative;
+        }
+        
+        .sentence-item.highlighted {
+            background-color: rgba(26, 86, 219, 0.05);
+            border-color: rgba(26, 86, 219, 0.2);
+        }
+        
+        .sentence-item.looping {
+            background-color: rgba(255, 149, 0, 0.1);
+            border-color: rgba(255, 149, 0, 0.3);
+        }
+        
+        .sentence-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .sentence-number {
+            background-color: #f5f5f7;
+            color: #86868b;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-right: 12px;
+        }
+        
+        .speaker-icon {
+            color: #1a56db;
+            font-size: 1.4rem;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: all 0.2s;
+        }
+        
+        .speaker-icon:hover {
+            background-color: rgba(26, 86, 219, 0.1);
+        }
+        
+        .sentence-text {
+            font-size: 1.3rem;
+            line-height: 1.7;
+            margin-bottom: 5px;
+            cursor: pointer;
+            padding: 5px 0;
+        }
+        
+        .word-container {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            margin-right: 8px;
+            padding: 4px 6px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+            cursor: pointer;
+        }
+        
+        .word-container:hover {
+            background-color: rgba(26, 86, 219, 0.08);
+        }
+        
+        .word-container.highlighted {
+            background-color: rgba(26, 86, 219, 0.15);
+        }
+        
+        .word {
+            font-size: 1.3rem;
+        }
+        
+        .ipa {
+            color: #1a56db;
+            font-size: 0.85rem;
+            display: block;
+            margin-top: 3px;
+            font-family: 'Arial', sans-serif;
+            min-height: 1.2em;
+        }
+        
+        .no-ipa-container {
+            display: inline-block;
+            font-size: 1.3rem;
+            margin-right: 8px;
+            padding: 4px 6px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+            cursor: pointer;
+        }
+        
+        .no-ipa-container:hover {
+            background-color: rgba(26, 86, 219, 0.08);
+        }
+        
+        .no-ipa-container.highlighted {
+            background-color: rgba(26, 86, 219, 0.15);
+        }
+        
+        .chinese-text {
+            color: #1d1d1f;
+            font-size: 1.3rem;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: #86868b;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #1a56db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background-color: #f0f0f0;
+            border-radius: 3px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        
+        .progress {
+            height: 100%;
+            background-color: #1a56db;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .history-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #f0f0f0;
+        }
+        
+        .history-btn {
+            background-color: #1a56db;
+            color: white;
+            border: none;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 12px rgba(26, 86, 219, 0.3);
+        }
+        
+        .history-btn:hover {
+            background-color: #1546b8;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(26, 86, 219, 0.4);
+        }
+        
+        .history-btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .history-info {
+            text-align: center;
+            color: #86868b;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 15px;
+            }
+            
+            h1 {
+                font-size: 2.2rem;
+            }
+            
+            .input-section, .output-section {
+                padding: 20px;
+            }
+            
+            .sentence-text {
+                font-size: 1.2rem;
+            }
+            
+            .go-btn {
+                width: 100px;
+                padding: 12px 20px;
+            }
+            
+            .history-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 1.3rem;
+            }
+        }
+        
+        /* 高亮动画 */
+        .highlighted-word {
+            animation: highlightWord 0.5s ease;
+        }
+        
+        @keyframes highlightWord {
+            0% { background-color: rgba(26, 86, 219, 0); }
+            50% { background-color: rgba(26, 86, 219, 0.2); }
+            100% { background-color: rgba(26, 86, 219, 0.1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 id="title">English Reader</h1>
+        </header>
+        
+        <section class="input-section">
+            <textarea id="textInput" placeholder="粘贴或输入英文文本"></textarea>
+            <div class="controls">
+                <button class="go-btn" id="processBtn">Go</button>
+            </div>
+            <div class="stats" id="stats">0 单词</div>
+        </section>
+        
+        <section class="output-section">
+            <div class="loading" id="loadingIndicator">
+                <div class="spinner"></div>
+                <p id="loadingText">正在处理文本并获取音标...</p>
+                <div class="progress-bar">
+                    <div class="progress" id="progressBar"></div>
+                </div>
+            </div>
+            
+            <div class="sentences-container" id="sentencesContainer">
+                <div class="placeholder-text">
+                    <p style="text-align: center; color: #86868b; padding: 40px 0;">
+                        处理后的文本将显示在这里
+                    </p>
+                </div>
+            </div>
+            
+            <div class="history-controls">
+                <button class="history-btn" id="prevBtn" title="前一个结果">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <button class="history-btn" id="nextBtn" title="后一个结果">
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+            <div class="history-info" id="historyInfo">无历史记录</div>
+        </section>
+    </div>
+
+    <script>
+        // 全局变量
+        let sentences = [];
+        let currentSentenceIndex = 0;
+        let isLooping = false;
+        let loopingSentence = null;
+        let speechSynthesis = window.speechSynthesis;
+        let selectedVoice = null;
+        let wakeLock = null;
+        
+        // 历史记录管理
+        let history = [];
+        let currentHistoryIndex = -1;
+        
+        // 扩展的常见英文缩写列表，防止错误断句
+        const abbreviations = new Set([
+            'Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.', 'Capt.', 'Lt.', 'Rev.', 'St.', 
+            'Jr.', 'Sr.', 'U.S.A.', 'U.S.', 'U.K.', 'A.M.', 'P.M.', 'e.g.', 'i.e.', 
+            'etc.', 'vs.', 'approx.', 'dept.', 'est.', 'min.', 'max.', 'no.', 
+            'vol.', 'fig.', 'eq.', 'ref.', 'sec.', 'ch.', 'p.', 'pp.', 'ex.', 
+            'cf.', 'ca.', 'et al.', 'ibid.', 'op. cit.', 'loc. cit.', 'viz.', 
+            'Ph.D.', 'M.D.', 'B.A.', 'M.A.', 'B.Sc.', 'M.Sc.', 'LL.B.', 'LL.M.', 
+            'J.D.', 'D.D.S.', 'D.V.M.', 'vs.', 'vs', 'approx', 'dept', 'est',
+            'min', 'max', 'no', 'vol', 'fig', 'eq', 'ref', 'sec', 'ch', 'p',
+            'pp', 'ex', 'cf', 'ca', 'Inc.', 'Co.', 'Corp.', 'Ltd.', 'etc',
+            'U.S.A', 'U.S', 'U.K', 'A.M', 'P.M', 'a.m', 'p.m',
+            'Jan.', 'Feb.', 'Mar.', 'Apr.', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Sept.', 'Oct.', 'Nov.', 'Dec.',
+            'Mon.', 'Tue.', 'Tues.', 'Wed.', 'Thu.', 'Thur.', 'Thurs.', 'Fri.', 'Sat.', 'Sun.',
+            'kg.', 'km.', 'lb.', 'ft.', 'in.', 'mm.', 'cm.', 'm.', 'yd.'
+        ]);
+        
+        // 常用单词音标缓存（本地预置，减少API请求）
+        const commonWordsIpa = {
+            'the': '/ðə/', 'be': '/biː/', 'to': '/tuː/', 'of': '/ɒv/', 'and': '/ænd/', 'a': '/ə/', 
+            'in': '/ɪn/', 'that': '/ðæt/', 'have': '/hæv/', 'i': '/aɪ/', 'it': '/ɪt/', 'for': '/fɔːr/', 
+            'not': '/nɒt/', 'on': '/ɒn/', 'with': '/wɪð/', 'he': '/hiː/', 'as': '/æz/', 'you': '/juː/', 
+            'do': '/duː/', 'at': '/æt/', 'this': '/ðɪs/', 'but': '/bʌt/', 'his': '/hɪz/', 'by': '/baɪ/', 
+            'from': '/frɒm/', 'they': '/ðeɪ/', 'we': '/wiː/', 'say': '/seɪ/', 'her': '/hɜːr/', 'she': '/ʃiː/', 
+            'or': '/ɔːr/', 'an': '/æn/', 'will': '/wɪl/', 'my': '/maɪ/', 'one': '/wʌn/', 'all': '/ɔːl/', 
+            'would': '/wʊd/', 'there': '/ðeər/', 'their': '/ðeər/', 'what': '/wɒt/', 'so': '/səʊ/', 
+            'up': '/ʌp/', 'out': '/aʊt/', 'if': '/ɪf/', 'about': '/əˈbaʊt/', 'who': '/huː/', 'get': '/ɡet/', 
+            'which': '/wɪtʃ/', 'go': '/ɡəʊ/', 'me': '/miː/', 'when': '/wen/', 'make': '/meɪk/', 'can': '/kæn/', 
+            'like': '/laɪk/', 'time': '/taɪm/', 'no': '/nəʊ/', 'just': '/dʒʌst/', 'him': '/hɪm/', 
+            'know': '/nəʊ/', 'take': '/teɪk/', 'people': '/ˈpiːpl/', 'into': '/ˈɪntuː/', 'year': '/jɪər/', 
+            'your': '/jɔːr/', 'good': '/ɡʊd/', 'some': '/sʌm/', 'could': '/kʊd/', 'them': '/ðem/', 'see': '/siː/', 
+            'other': '/ˈʌðər/', 'than': '/ðæn/', 'then': '/ðen/', 'now': '/naʊ/', 'look': '/lʊk/', 
+            'only': '/ˈəʊnli/', 'come': '/kʌm/', 'its': '/ɪts/', 'over': '/ˈəʊvər/', 'think': '/θɪŋk/', 
+            'also': '/ˈɔːlsəʊ/', 'back': '/bæk/', 'after': '/ˈɑːftər/', 'use': '/juːz/', 'two': '/tuː/', 
+            'how': '/haʊ/', 'our': '/aʊər/', 'work': '/wɜːk/', 'first': '/fɜːst/', 'well': '/wel/', 
+            'way': '/weɪ/', 'even': '/ˈiːvn/', 'new': '/njuː/', 'want': '/wɒnt/', 'because': '/bɪˈkɒz/', 
+            'any': '/ˈeni/', 'these': '/ðiːz/', 'give': '/ɡɪv/', 'day': '/deɪ/', 'most': '/məʊst/', 
+            'us': '/ʌs/', 'hello': '/həˈləʊ/', 'name': '/neɪm/', 'is': '/ɪz/', 'am': '/æm/', 'are': '/ɑːr/', 
+            'was': '/wɒz/', 'were': '/wɜːr/', 'been': '/biːn/', 'being': '/ˈbiːɪŋ/', 'has': '/hæz/', 
+            'had': '/hæd/', 'having': '/ˈhævɪŋ/', 'does': '/dʌz/', 'did': '/dɪd/', 'doing': '/ˈduːɪŋ/', 
+            'said': '/sed/', 'saying': '/ˈseɪɪŋ/', 'says': '/sez/', 'went': '/went/', 'gone': '/ɡɒn/', 
+            'going': '/ˈɡəʊɪŋ/', 'came': '/keɪm/', 'coming': '/ˈkʌmɪŋ/', 'took': '/tʊk/', 'taken': '/ˈteɪkən/', 
+            'taking': '/ˈteɪkɪŋ/', 'made': '/meɪd/', 'making': '/ˈmeɪkɪŋ/', 'got': '/ɡɒt/', 'getting': '/ˈɡetɪŋ/', 
+            'seen': '/siːn/', 'seeing': '/ˈsiːɪŋ/', 'thought': '/θɔːt/', 'thinking': '/ˈθɪŋkɪŋ/', 
+            'gave': '/ɡeɪv/', 'giving': '/ˈɡɪvɪŋ/', 'found': '/faʊnd/', 'finding': '/ˈfaɪndɪŋ/', 
+            'told': '/təʊld/', 'telling': '/ˈtelɪŋ/', 'asked': '/ɑːskt/', 'asking': '/ˈɑːskɪŋ/', 
+            'felt': '/felt/', 'feeling': '/ˈfiːlīŋ/', 'became': '/bɪˈkeɪm/', 'becoming': '/bɪˈkʌmɪŋ/', 
+            'left': '/left/', 'leaving': '/ˈliːvɪŋ/', 'put': '/pʊt/', 'putting': '/ˈpʊtɪŋ/', 
+            'brought': '/brɔːt/', 'bringing': '/ˈbrɪŋɪŋ/', 'began': '/bɪˈɡæn/', 'beginning': '/bɪˈɡɪnɪŋ/', 
+            'seemed': '/siːmd/', 'seeming': '/ˈsiːmɪŋ/', 'helped': '/helpt/', 'helping': '/ˈhelpɪŋ/', 
+            'talked': '/tɔːkt/', 'talking': '/ˈtɔːkīŋ/', 'turned': '/tɜːnd/', 'turning': '/ˈtɜːnɪŋ/', 
+            'started': '/ˈstɑːtɪd/', 'starting': '/ˈstɑːtɪŋ/', 'showed': '/ʃəʊd/', 'showing': '/ˈʃəʊɪŋ/', 
+            'heard': '/hɜːd/', 'hearing': '/ˈhɪərɪŋ/', 'played': '/pleɪd/', 'playing': '/ˈpleɪɪŋ/', 
+            'ran': '/ræn/', 'running': '/ˈrʌnɪŋ/', 'moved': '/muːvd/', 'moving': '/ˈmuːvɪŋ/', 
+            'lived': '/lɪvd/', 'living': '/ˈlɪvɪŋ/', 'believed': '/bɪˈliːvd/', 'believing': '/bɪˈliːvɪŋ/', 
+            'held': '/held/', 'holding': '/ˈhəʊldɪŋ/', 'broke': '/brəʊk/', 'breaking': '/ˈbreɪkɪŋ/', 
+            'understood': '/ˌʌndərˈstʊd/', 'understanding': '/ˌʌndərˈstændɪŋ/', 'kept': '/kept/', 
+            'keeping': '/ˈkiːpɪŋ/', 'opened': '/ˈəʊpənd/', 'opening': '/ˈəʊpənɪŋ/', 'changed': '/tʃeɪndʒd/', 
+            'changing': '/ˈtʃeɪndʒɪŋ/', 'led': '/led/', 'leading': '/ˈliːdɪŋ/', 'stood': '/stʊd/', 
+            'standing': '/ˈstændɪŋ/', 'knew': '/njuː/', 'knowing': '/ˈnəʊɪŋ/', 'learned': '/lɜːnd/', 
+            'learning': '/ˈlɜːnɪŋ/', 'learn': '/lɜːn/', 'learns': '/lɜːnz/', 'learnt': '/lɜːnt/'
+        };
+        
+        // 智能分离选中状态管理
+        document.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.word') || e.target.closest('.no-ipa-container') || e.target.closest('.chinese-text')) {
+                document.body.classList.add('selecting-words');
+                document.body.classList.remove('selecting-ipas');
+            } else if (e.target.closest('.ipa')) {
+                document.body.classList.add('selecting-ipas');
+                document.body.classList.remove('selecting-words');
+            } else {
+                document.body.classList.remove('selecting-words', 'selecting-ipas');
+            }
+        });
+
+        // 初始化函数
+        function init() {
+            const textInput = document.getElementById('textInput');
+            const processBtn = document.getElementById('processBtn');
+            const title = document.getElementById('title');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            
+            processBtn.addEventListener('click', processText);
+            prevBtn.addEventListener('click', showPreviousResult);
+            nextBtn.addEventListener('click', showNextResult);
+            
+            initSpeechSynthesis();
+            
+            title.addEventListener('click', () => {
+                playAllSentences();
+                toggleWakeLock();
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (isLooping && !e.target.closest('.sentence-item')) {
+                    stopLooping();
+                }
+            });
+            
+            loadHistoryFromStorage();
+            updateHistoryControls();
+        }
+        
+        function loadHistoryFromStorage() {
+            try {
+                const savedHistory = localStorage.getItem('englishReader_history');
+                if (savedHistory) {
+                    history = JSON.parse(savedHistory);
+                    if (!Array.isArray(history)) history = [];
+                }
+                const savedIndex = localStorage.getItem('englishReader_history_index');
+                if (savedIndex !== null) currentHistoryIndex = parseInt(savedIndex);
+                if (history.length > 0 && currentHistoryIndex >= 0 && currentHistoryIndex < history.length) {
+                    restoreHistoryResult(currentHistoryIndex);
+                }
+            } catch (e) {
+                console.warn('加载历史记录失败:', e);
+                history = [];
+                currentHistoryIndex = -1;
+            }
+        }
+        
+        function saveHistoryToStorage() {
+            try {
+                localStorage.setItem('englishReader_history', JSON.stringify(history));
+                localStorage.setItem('englishReader_history_index', currentHistoryIndex.toString());
+            } catch (e) {
+                console.warn('保存历史记录失败:', e);
+            }
+        }
+        
+        function addResultToHistory(sentencesHTML, stats) {
+            const result = {
+                sentencesHTML: sentencesHTML,
+                stats: stats,
+                timestamp: new Date().toLocaleString()
+            };
+            history.push(result);
+            if (history.length > 2) history.shift();
+            currentHistoryIndex = history.length - 1;
+            saveHistoryToStorage();
+            updateHistoryControls();
+        }
+        
+        function showPreviousResult() {
+            if (currentHistoryIndex > 0) {
+                currentHistoryIndex--;
+                restoreHistoryResult(currentHistoryIndex);
+                updateHistoryControls();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+        
+        function showNextResult() {
+            if (currentHistoryIndex < history.length - 1) {
+                currentHistoryIndex++;
+                restoreHistoryResult(currentHistoryIndex);
+                updateHistoryControls();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+        
+        function restoreHistoryResult(index) {
+            if (index < 0 || index >= history.length) return;
+            const result = history[index];
+            const sentencesContainer = document.getElementById('sentencesContainer');
+            sentencesContainer.innerHTML = result.sentencesHTML;
+            bindSentenceEvents();
+            sentences = [];
+            document.querySelectorAll('.sentence-item').forEach(element => {
+                sentences.push(element.dataset.text);
+            });
+            document.getElementById('stats').textContent = result.stats;
+            updateHistoryInfo();
+            document.querySelector('.placeholder-text')?.remove();
+        }
+        
+        function updateHistoryControls() {
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            prevBtn.disabled = currentHistoryIndex <= 0;
+            nextBtn.disabled = currentHistoryIndex >= history.length - 1 || currentHistoryIndex < 0;
+            updateHistoryInfo();
+        }
+        
+        function updateHistoryInfo() {
+            const historyInfo = document.getElementById('historyInfo');
+            if (history.length === 0) {
+                historyInfo.textContent = "无历史记录";
+            } else {
+                historyInfo.textContent = `${currentHistoryIndex + 1}/${history.length} - ${history[currentHistoryIndex].timestamp}`;
+            }
+        }
+        
+        function bindSentenceEvents() {
+            document.querySelectorAll('.speaker-icon').forEach(icon => {
+                icon.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const sentenceItem = e.target.closest('.sentence-item');
+                    speakSentence(sentenceItem.dataset.text, sentenceItem);
+                });
+            });
+            
+            document.querySelectorAll('.sentence-text').forEach(textDiv => {
+                const sentenceItem = textDiv.closest('.sentence-item');
+                const sentence = sentenceItem.dataset.text;
+                textDiv.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('word') || 
+                        e.target.classList.contains('ipa') || 
+                        e.target.classList.contains('word-container') ||
+                        e.target.classList.contains('no-ipa-container')) {
+                        return;
+                    }
+                    speakSentence(sentence, sentenceItem);
+                });
+                
+                let clickTimer = null;
+                textDiv.addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+                    if (isLooping && loopingSentence === sentenceItem) stopLooping();
+                    else startLooping(sentence, sentenceItem);
+                });
+                
+                textDiv.addEventListener('mousedown', () => {
+                    clickTimer = setTimeout(() => { clickTimer = null; }, 300);
+                });
+            });
+        }
+        
+        function initSpeechSynthesis() {
+            if (!speechSynthesis) { console.warn('浏览器不支持语音合成'); return; }
+            speechSynthesis.addEventListener('voiceschanged', () => {
+                const voices = speechSynthesis.getVoices();
+                if (voices.length > 0) selectedVoice = getPreferredVoice(voices);
+            });
+            const voices = speechSynthesis.getVoices();
+            if (voices.length > 0) selectedVoice = getPreferredVoice(voices);
+        }
+        
+        function getPreferredVoice(voices) {
+            const samantha = voices.find(voice => voice.name.toLowerCase().includes('samantha'));
+            if (samantha) return samantha;
+            const britishVoices = voices.filter(voice => voice.lang.startsWith('en-GB') || voice.name.toLowerCase().includes('british') || voice.name.toLowerCase().includes('uk'));
+            if (britishVoices.length > 0) return britishVoices[0];
+            const americanVoices = voices.filter(voice => voice.lang.startsWith('en-US') || voice.name.toLowerCase().includes('american') || voice.name.toLowerCase().includes('us'));
+            if (americanVoices.length > 0) return americanVoices[0];
+            const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
+            if (englishVoices.length > 0) return englishVoices[0];
+            return voices.find(voice => voice.default) || voices[0];
+        }
+        
+        async function processText() {
+            const textInput = document.getElementById('textInput');
+            const text = textInput.value.trim();
+            if (!text) { alert('请输入英文文本'); return; }
+            
+            const processBtn = document.getElementById('processBtn');
+            processBtn.disabled = true;
+            processBtn.textContent = '处理中...';
+            
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const loadingText = document.getElementById('loadingText');
+            const progressBar = document.getElementById('progressBar');
+            loadingIndicator.classList.add('active');
+            loadingText.textContent = '正在分割句子...';
+            progressBar.style.width = '10%';
+            
+            const sentencesContainer = document.getElementById('sentencesContainer');
+            sentencesContainer.innerHTML = '';
+            
+            sentences = splitIntoSentences(text);
+            
+            loadingText.textContent = '分析单词...';
+            progressBar.style.width = '30%';
+            
+            const allWords = new Set();
+            const wordMap = new Map();
+            
+            for (const sentence of sentences) {
+                const words = extractWordsFromSentence(sentence);
+                for (const word of words) {
+                    const cleanWord = word.toLowerCase().replace(/[''']/g, '');
+                    if (!shouldSkipIpa(word) && !commonWordsIpa[cleanWord]) {
+                        allWords.add(cleanWord);
+                    }
+                    wordMap.set(word, cleanWord);
+                }
+            }
+            
+            loadingText.textContent = `获取音标 (0/${allWords.size})...`;
+            progressBar.style.width = '50%';
+            
+            const ipaResults = await batchFetchIpa(Array.from(allWords), (progress) => {
+                loadingText.textContent = `获取音标 (${progress.processed}/${progress.total})...`;
+                progressBar.style.width = `${50 + (progress.processed / progress.total) * 30}%`;
+            });
+            
+            loadingText.textContent = '生成结果...';
+            progressBar.style.width = '90%';
+            
+            for (let i = 0; i < sentences.length; i++) {
+                const sentence = sentences[i];
+                const sentenceElement = await createSentenceElement(sentence, i + 1, ipaResults, wordMap);
+                sentencesContainer.appendChild(sentenceElement);
+                if (i % 2 === 0) await new Promise(resolve => setTimeout(resolve, 0));
+            }
+            
+            loadingIndicator.classList.remove('active');
+            progressBar.style.width = '0%';
+            processBtn.disabled = false;
+            processBtn.textContent = 'Go';
+            textInput.value = '';
+            
+            updateStats(countWords(text));
+            addResultToHistory(sentencesContainer.innerHTML, document.getElementById('stats').textContent);
+            document.querySelector('.placeholder-text')?.remove();
+            
+            setTimeout(() => {
+                const outputSection = document.querySelector('.output-section');
+                if (outputSection) outputSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 300);
+        }
+        
+        async function batchFetchIpa(words, progressCallback) {
+            const ipaResults = {};
+            let processed = 0;
+            const cachedIpa = JSON.parse(localStorage.getItem('ipaCache') || '{}');
+            
+            // 降低每批并发数量(从5降为3)，防止触发 429 Too Many Requests
+            const batchSize = 3; 
+            
+            for (let i = 0; i < words.length; i += batchSize) {
+                const batch = words.slice(i, i + batchSize);
+                const promises = batch.map(async (word) => {
+                    if (cachedIpa[word]) { ipaResults[word] = cachedIpa[word]; return; }
+                    if (commonWordsIpa[word]) { ipaResults[word] = commonWordsIpa[word]; return; }
+                    
+                    try {
+                        const ipa = await fetchIpaFromAPI(word);
+                        if (ipa) {
+                            ipaResults[word] = ipa;
+                            cachedIpa[word] = ipa;
+                        }
+                    } catch (error) {
+                        console.warn(`无法获取单词 "${word}" 的音标:`, error);
+                        // 不再调用 fake 的生成音标函数，避免生成如 /ˌmandarin/ 的错音标
+                    }
+                });
+                
+                await Promise.all(promises);
+                processed += batch.length;
+                if (progressCallback) progressCallback({ processed, total: words.length });
+                
+                // 增加延迟时间至 300ms 规避严格的 API 频率限制
+                if (i + batchSize < words.length) {
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                }
+            }
+            
+            if (Object.keys(cachedIpa).length > 0) {
+                try { localStorage.setItem('ipaCache', JSON.stringify(cachedIpa)); } 
+                catch (e) { console.warn('无法保存音标缓存', e); }
+            }
+            return ipaResults;
+        }
+        
+        async function fetchIpaFromAPI(word, retryCount = 2) {
+            try {
+                const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+                
+                // 增加失败重试机制，针对 429 的拦截
+                if (response.status === 429 && retryCount > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    return await fetchIpaFromAPI(word, retryCount - 1);
+                }
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    let ipa = '';
+                    
+                    if (data && data.length > 0) {
+                        // 优先检查外层的 phonetic 字段
+                        if (data[0].phonetic) {
+                            ipa = data[0].phonetic;
+                        }
+                        
+                        // 有些字典词条的音标在 phonetics 数组内
+                        if (data[0].phonetics && data[0].phonetics.length > 0) {
+                            for (const phonetic of data[0].phonetics) {
+                                if (phonetic.text) {
+                                    ipa = phonetic.text;
+                                    // 优先捕获英音 (UK)
+                                    if (phonetic.text.includes('UK') || (phonetic.audio && phonetic.audio.includes('uk'))) {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (ipa) return ipa.replace(/^\//, '').replace(/\/$/, '');
+                    }
+                }
+            } catch (error) {
+                console.warn(`API请求失败 "${word}":`, error);
+            }
+            // 返回 null，不再乱造音标
+            return null;
+        }
+        
+        function extractWordsFromSentence(sentence) {
+            const wordRegex = /([\w'’@.-]+)/g;
+            const tokens = sentence.match(wordRegex) || [];
+            return tokens.filter(token => !/^[.,;:!?]+$/.test(token));
+        }
+        
+        function shouldSkipIpa(word) {
+            if (/^\d+$/.test(word) || /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(word) ||
+                /^[A-Za-z]+:\/\/.+/.test(word) || /^\d+\.\d+$/.test(word) || /^[A-Z]\.$/.test(word) ||
+                abbreviations.has(word)) return true;
+            return false;
+        }
+        
+        function splitIntoSentences(text) {
+            if (!text.trim()) return [];
+            const sentences = [];
+            let currentSentence = '';
+            for (let i = 0; i < text.length; i++) {
+                currentSentence += text[i];
+                if (/[.!?。？！]/.test(text[i])) {
+                    if (isRealSentenceEnd(text, i)) {
+                        if (i + 1 < text.length && /['"”]/.test(text[i + 1])) {
+                            currentSentence += text[i + 1]; i++;
+                        }
+                        sentences.push(currentSentence.trim());
+                        currentSentence = '';
+                    }
+                }
+            }
+            if (currentSentence.trim()) sentences.push(currentSentence.trim());
+            return sentences.filter(s => s.length > 0);
+        }
+        
+        function isRealSentenceEnd(text, index) {
+            const char = text[index];
+            if (!/[.!?。？！]/.test(char)) return false;
+            if (index === text.length - 1) return true;
+            const nextChar = text[index + 1];
+            if (/\s/.test(nextChar)) return !isAbbreviation(text, index);
+            if (['"', "'", '”'].includes(nextChar)) {
+                if (index + 2 >= text.length || /\s/.test(text[index + 2])) return !isAbbreviation(text, index);
+            }
+            return false;
+        }
+        
+        function isAbbreviation(text, dotIndex) {
+            let start = dotIndex;
+            while (start > 0 && /[\w.]/.test(text[start - 1])) start--;
+            const possibleAbbr = text.substring(start, dotIndex + 1);
+            if (abbreviations.has(possibleAbbr)) return true;
+            if (possibleAbbr.length === 2 && /[A-Z]\./.test(possibleAbbr)) return true;
+            if (possibleAbbr.length === 2 && /\d\./.test(possibleAbbr)) return true;
+            if (start > 0) {
+                const beforeAbbr = text.substring(Math.max(0, start - 5), start);
+                if (beforeAbbr.includes('@') || beforeAbbr.includes('www') || beforeAbbr.includes('http')) return true;
+            }
+            return false;
+        }
+        
+        async function createSentenceElement(sentence, index, ipaResults, wordMap) {
+            const sentenceDiv = document.createElement('div');
+            sentenceDiv.className = 'sentence-item';
+            sentenceDiv.dataset.index = index;
+            sentenceDiv.dataset.text = sentence;
+            
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'sentence-header';
+            
+            const numberDiv = document.createElement('div');
+            numberDiv.className = 'sentence-number';
+            numberDiv.textContent = index;
+            
+            const speakerIcon = document.createElement('i');
+            speakerIcon.className = 'fas fa-volume-up speaker-icon';
+            speakerIcon.title = '朗读此句';
+            
+            speakerIcon.addEventListener('click', (e) => {
+                e.stopPropagation();
+                speakSentence(sentence, sentenceDiv);
+            });
+            
+            headerDiv.appendChild(numberDiv);
+            headerDiv.appendChild(speakerIcon);
+            
+            const textDiv = document.createElement('div');
+            textDiv.className = 'sentence-text';
+            textDiv.innerHTML = splitSentenceIntoWordsWithIpa(sentence, ipaResults, wordMap);
+            
+            textDiv.addEventListener('click', (e) => {
+                if (e.target.classList.contains('word') || e.target.classList.contains('ipa') || 
+                    e.target.classList.contains('word-container') || e.target.classList.contains('no-ipa-container')) {
+                    return;
+                }
+                speakSentence(sentence, sentenceDiv);
+            });
+            
+            let clickTimer = null;
+            textDiv.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+                if (isLooping && loopingSentence === sentenceDiv) stopLooping();
+                else startLooping(sentence, sentenceDiv);
+            });
+            
+            textDiv.addEventListener('mousedown', () => {
+                clickTimer = setTimeout(() => { clickTimer = null; }, 300);
+            });
+            
+            sentenceDiv.appendChild(headerDiv);
+            sentenceDiv.appendChild(textDiv);
+            return sentenceDiv;
+        }
+        
+        function splitSentenceIntoWordsWithIpa(sentence, ipaResults, wordMap) {
+            const wordRegex = /([\w'’@.-]+|[^\w\s])/g;
+            const tokens = sentence.match(wordRegex) || [];
+            let result = '';
+            
+            for (const token of tokens) {
+                if (/[\w'’@.-]/.test(token) && !/^[.,;:!?]+$/.test(token)) {
+                    if (shouldSkipIpa(token)) {
+                        result += `<span class="no-ipa-container" data-word="${token}">${token}</span>`;
+                    } else {
+                        const cleanWord = token.toLowerCase().replace(/[''']/g, '');
+                        let ipa = '';
+                        
+                        if (ipaResults[cleanWord]) ipa = ipaResults[cleanWord];
+                        else if (commonWordsIpa[cleanWord]) ipa = commonWordsIpa[cleanWord];
+                        
+                        result += `<span class="word-container" data-word="${token}">`;
+                        result += `<span class="word">${token}</span>`;
+                        
+                        // 确保没有乱码瞎编的音标。有真正的音标则渲染，没有就留空。
+                        if (ipa) {
+                            const formattedIpa = ipa.startsWith('/') ? ipa : `/${ipa}/`;
+                            result += `<span class="ipa">${formattedIpa}</span>`;
+                        } else {
+                            result += `<span class="ipa"></span>`;
+                        }
+                        result += '</span>';
+                    }
+                } else if (/[\u4e00-\u9fa5]/.test(token)) {
+                    result += `<span class="chinese-text">${token}</span>`;
+                } else {
+                    result += `<span>${token}</span>`;
+                }
+                
+                if (!/[。？！，；：、”')]/.test(token)) result += ' ';
+            }
+            return result;
+        }
+        
+        function speakSentence(sentence, sentenceElement = null) {
+            if (!speechSynthesis) { alert('您的浏览器不支持语音合成功能'); return; }
+            speechSynthesis.cancel();
+            
+            if (sentenceElement) {
+                document.querySelectorAll('.sentence-item').forEach(item => item.classList.remove('highlighted'));
+                sentenceElement.classList.add('highlighted');
+                setTimeout(() => sentenceElement.classList.remove('highlighted'), 5000);
+            }
+            
+            const utterance = new SpeechSynthesisUtterance(sentence);
+            if (selectedVoice) utterance.voice = selectedVoice;
+            utterance.rate = 0.9;
+            utterance.pitch = 1;
+            utterance.volume = 1;
+            speechSynthesis.speak(utterance);
+        }
+        
+        function startLooping(sentence, sentenceElement) {
+            if (isLooping) stopLooping();
+            isLooping = true;
+            loopingSentence = sentenceElement;
+            sentenceElement.classList.add('looping');
+            
+            const loopSpeak = () => {
+                if (!isLooping) return;
+                speakSentence(sentence, sentenceElement);
+                const utterance = new SpeechSynthesisUtterance(sentence);
+                if (selectedVoice) utterance.voice = selectedVoice;
+                utterance.onend = () => { if (isLooping) setTimeout(loopSpeak, 500); };
+                speechSynthesis.speak(utterance);
+            };
+            loopSpeak();
+        }
+        
+        function stopLooping() {
+            isLooping = false;
+            if (loopingSentence) {
+                loopingSentence.classList.remove('looping');
+                loopingSentence = null;
+            }
+            speechSynthesis.cancel();
+        }
+        
+        async function playAllSentences() {
+            if (sentences.length === 0) { alert('请先输入文本并点击"Go"'); return; }
+            stopLooping();
+            speechSynthesis.cancel();
+            currentSentenceIndex = 0;
+            playNextSentence();
+        }
+        
+        function playNextSentence() {
+            if (currentSentenceIndex >= sentences.length) {
+                document.querySelectorAll('.sentence-item').forEach(item => item.classList.remove('highlighted'));
+                return;
+            }
+            const sentence = sentences[currentSentenceIndex];
+            const sentenceElement = document.querySelector(`.sentence-item[data-index="${currentSentenceIndex + 1}"]`);
+            if (sentenceElement) {
+                document.querySelectorAll('.sentence-item').forEach(item => item.classList.remove('highlighted'));
+                sentenceElement.classList.add('highlighted');
+                sentenceElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            
+            const utterance = new SpeechSynthesisUtterance(sentence);
+            if (selectedVoice) utterance.voice = selectedVoice;
+            utterance.onend = () => {
+                if (sentenceElement) setTimeout(() => sentenceElement.classList.remove('highlighted'), 300);
+                currentSentenceIndex++;
+                setTimeout(playNextSentence, 500);
+            };
+            speechSynthesis.speak(utterance);
+        }
+        
+        async function toggleWakeLock() {
+            if (!('wakeLock' in navigator)) return;
+            if (wakeLock) {
+                await wakeLock.release();
+                wakeLock = null;
+            } else {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                } catch (err) { console.error(`唤醒锁请求失败: ${err.message}`); }
+            }
+        }
+        
+        function updateStats(wordCount) {
+            document.getElementById('stats').textContent = `${wordCount} 单词`;
+        }
+        
+        function countWords(text) {
+            if (!text.trim()) return 0;
+            return text.split(/\s+/).filter(word => word.length > 0).length;
+        }
+        
+        document.addEventListener('click', (e) => {
+            const wordContainer = e.target.closest('.word-container');
+            if (wordContainer) {
+                const word = wordContainer.dataset.word;
+                document.querySelectorAll('.word-container, .no-ipa-container').forEach(c => c.classList.remove('highlighted'));
+                wordContainer.classList.add('highlighted');
+                wordContainer.classList.add('highlighted-word');
+                setTimeout(() => wordContainer.classList.remove('highlighted-word'), 500);
+                
+                if (speechSynthesis && word) {
+                    speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(word);
+                    if (selectedVoice) utterance.voice = selectedVoice;
+                    speechSynthesis.speak(utterance);
+                }
+                return;
+            }
+            
+            const noIpaContainer = e.target.closest('.no-ipa-container');
+            if (noIpaContainer) {
+                const word = noIpaContainer.dataset.word;
+                document.querySelectorAll('.word-container, .no-ipa-container').forEach(c => c.classList.remove('highlighted'));
+                noIpaContainer.classList.add('highlighted');
+                noIpaContainer.classList.add('highlighted-word');
+                setTimeout(() => noIpaContainer.classList.remove('highlighted-word'), 500);
+                
+                if (speechSynthesis && word) {
+                    speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(word);
+                    if (selectedVoice) utterance.voice = selectedVoice;
+                    speechSynthesis.speak(utterance);
+                }
+                return;
+            }
+        });
+        
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
