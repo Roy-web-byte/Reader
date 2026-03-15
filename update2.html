@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 让 iPhone 保持常亮，不熄屏 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>English Reader</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  background: #f7f8fa;
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+  position: relative;
+  padding-bottom: 60px; /* 为底部返回箭头预留空间 */
+}
+
+.title {
+  text-align: center;
+  font-size: 32px;
+  font-weight: bold;
+  color: #2c3e50;
+  margin: 30px 0 20px;
+  cursor: pointer;
+}
+
+#voiceSelect {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  background: #fff;
+  outline: none;
+}
+
+#inputArea {
+  width: 100%;
+  height: 180px;
+  padding: 15px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  resize: vertical;
+  outline: none;
+  background: white;
+}
+
+#goBtn {
+  width: 100%;
+  padding: 14px;
+  font-size: 18px;
+  font-weight: 600;
+  background: #007aff;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  margin: 12px 0 12px; /* 调整底部边距，为单词计数和导航留出空间 */
+  cursor: pointer;
+}
+
+#wordCount {
+  text-align: center;
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 10px;
+  min-height: 24px; /* 预留高度避免布局抖动 */
+}
+
+#navHistory {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 25px;
+  gap: 8px;
+}
+
+.history-arrows {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+}
+
+.history-arrow {
+  font-size: 24px;
+  cursor: pointer;
+  color: #007aff; /* 与 Go 按钮颜色一致 */
+  user-select: none;
+  transition: opacity 0.2s;
+}
+.history-arrow:hover {
+  opacity: 0.8;
+}
+.history-arrow.disabled {
+  color: #ccc;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+#historyTime {
+  font-size: 13px;
+  color: #888;
+  text-align: center;
+  min-height: 20px;
+}
+
+#result {
+  line-height: 1.8;
+  font-size: 18px;
+}
+
+.sentence {
+  display: flex;
+  align-items: center;
+  padding: 14px 12px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  background: #fff;
+  border: 1px solid #eee;
+  transition: background 0.2s;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sentence.active {
+  background: #e1f5fe;
+  border-color: #007aff;
+}
+
+.speaker {
+  margin-right: 12px;
+  font-size: 24px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.word {
+  display: inline-block;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.word.active {
+  background: #ffeb3b;
+  font-weight: 500;
+}
+
+#backToTopBtn {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #007aff; /* 与 Go 按钮颜色一致 */
+  color: white;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 100;
+}
+#backToTopBtn:hover {
+  opacity: 0.9;
+  transform: translateX(-50%) scale(1.05);
+}
+</style>
+</head>
+
+<body>
+  <div class="title">English Reader</div>
+
+  <select id="voiceSelect"></select>
+
+  <textarea id="inputArea" placeholder="Paste your English text here..."></textarea>
+  <button id="goBtn">Go</button>
+  <!-- 新增区域：单词计数和历史导航 -->
+  <div id="wordCount"></div>
+  <div id="navHistory" style="display: none;">
+    <div class="history-arrows">
+      <span id="prevHistory" class="history-arrow">◀</span>
+      <span id="nextHistory" class="history-arrow">▶</span>
+    </div>
+    <div id="historyTime"></div>
+  </div>
+
+  <div id="result"></div>
+
+  <!-- 新增：返回结果区的悬浮按钮 -->
+  <button id="backToTopBtn" title="Back to result">↑</button>
+
+<script>
+const inputArea = document.getElementById('inputArea');
+const goBtn = document.getElementById('goBtn');
+const result = document.getElementById('result');
+const voiceSelect = document.getElementById('voiceSelect');
+const titleEl = document.querySelector('.title');
+const wordCountEl = document.getElementById('wordCount');
+const navHistoryEl = document.getElementById('navHistory');
+const prevHistoryBtn = document.getElementById('prevHistory');
+const nextHistoryBtn = document.getElementById('nextHistory');
+const historyTimeEl = document.getElementById('historyTime');
+const backToTopBtn = document.getElementById('backToTopBtn');
+
+let allVoices = [];
+let currentUtterance = null;
+// --- 新增：历史记录相关变量 ---
+let historyIndex = -1; // 当前在历史记录中的位置
+let historyList = []; // 历史记录数组，元素为 {text, wordCount, timestamp}
+const HISTORY_STORAGE_KEY = 'englishReaderHistory';
+// ----------------------------
+
+// ————————— iPhone 防熄屏核心代码 —————————
+let wakeLock = null;
+async function requestWakeLock() {
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    console.log('屏幕已保持常亮');
+  } catch (err) {
+    console.log('无法保持常亮:', err);
+  }
+}
+// 页面可见时重新申请常亮
+document.addEventListener('visibilitychange', () => {
+  if (wakeLock && document.visibilityState === 'visible') {
+    requestWakeLock();
+  }
+});
+// 一打开页面就保持常亮
+window.addEventListener('load', requestWakeLock);
+// ————————— 防熄屏代码结束 —————————
+
+// --- 新增：格式化时间显示 ---
+function formatDateTime(timestamp) {
+  const date = new Date(timestamp);
+  const options = { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  };
+  return date.toLocaleDateString('en-US', options).replace(',', ',') + ', ' + 
+         date.getHours().toString().padStart(2, '0') + ':' + 
+         date.getMinutes().toString().padStart(2, '0');
+}
+
+// --- 新增：加载历史记录 ---
+function loadHistoryFromStorage() {
+  const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
+  if (stored) {
+    try {
+      historyList = JSON.parse(stored);
+      // 历史索引默认指向最新的记录（最后一条）
+      historyIndex = historyList.length - 1;
+    } catch (e) {
+      console.error('读取历史记录失败:', e);
+      historyList = [];
+      historyIndex = -1;
+    }
+  }
+}
+
+// --- 新增：保存当前记录到历史 ---
+function saveToHistory(text, count) {
+  const newRecord = { 
+    text: text, 
+    wordCount: count, 
+    timestamp: Date.now() 
+  };
+  
+  // 如果和最后一条记录内容相同，则不重复保存
+  if (historyList.length > 0 && historyList[historyList.length - 1].text === text) {
+    return;
+  }
+  
+  historyList.push(newRecord);
+  // 限制历史记录条数为10条
+  if (historyList.length > 10) {
+    historyList.shift(); // 移除最旧的一条
+  }
+  historyIndex = historyList.length - 1; // 索引指向最新记录
+  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(historyList));
+  updateHistoryNavButtons(); // 更新导航按钮状态
+}
+
+// --- 新增：更新历史导航按钮状态和时间显示 ---
+function updateHistoryNavButtons() {
+  // 更新箭头按钮状态
+  prevHistoryBtn.classList.toggle('disabled', historyIndex <= 0);
+  nextHistoryBtn.classList.toggle('disabled', historyIndex >= historyList.length - 1);
+  
+  // 更新时间显示
+  if (historyIndex >= 0 && historyIndex < historyList.length) {
+    const currentRecord = historyList[historyIndex];
+    historyTimeEl.textContent = formatDateTime(currentRecord.timestamp);
+  } else {
+    historyTimeEl.textContent = '';
+  }
+  
+  // 如果没有历史记录，隐藏导航区域
+  navHistoryEl.style.display = historyList.length > 1 ? 'flex' : 'none';
+}
+
+// --- 新增：导航到特定历史记录 ---
+function navigateHistory(direction) {
+  if (direction === 'prev' && historyIndex > 0) {
+    historyIndex--;
+  } else if (direction === 'next' && historyIndex < historyList.length - 1) {
+    historyIndex++;
+  } else {
+    return; // 无法导航
+  }
+  
+  const record = historyList[historyIndex];
+  inputArea.value = record.text;
+  // 触发"Go"按钮的点击事件，以重新处理并显示结果
+  goBtn.click();
+  updateHistoryNavButtons();
+}
+
+// --- 新增：滚动到结果区域的函数 ---
+function scrollToResult() {
+  result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// --- 新增：控制返回顶部按钮显示的简单逻辑 ---
+window.addEventListener('scroll', () => {
+  // 当向下滚动超过200像素时显示按钮
+  if (window.scrollY > 200) {
+    backToTopBtn.style.display = 'flex';
+  } else {
+    backToTopBtn.style.display = 'none';
+  }
+});
+
+// 初始化：加载历史记录
+loadHistoryFromStorage();
+
+function loadVoices() {
+  allVoices = window.speechSynthesis.getVoices();
+  voiceSelect.innerHTML = '';
+  allVoices.forEach((voice, i) => {
+    if (voice.lang.includes('en')) {
+      const option = document.createElement('option');
+      option.value = i;
+      option.textContent = `${voice.name} (${voice.lang})`;
+      voiceSelect.appendChild(option);
+    }
+  });
+  // --- 修改：默认语音改为 Daniel ---
+  const danielIndex = allVoices.findIndex(v =>
+    v.name.includes('Daniel') && v.lang.includes('en')
+  );
+  if (danielIndex !== -1) {
+    voiceSelect.value = danielIndex;
+  } else {
+    // 如果找不到Daniel，回退到原来的Samantha逻辑
+    const samanthaIndex = allVoices.findIndex(v =>
+      v.name.includes('Samantha') && v.lang.includes('en-US')
+    );
+    if (samanthaIndex !== -1) {
+      voiceSelect.value = samanthaIndex;
+    }
+  }
+  // --- 修改结束 ---
+}
+
+function getSelectedVoice() {
+  return allVoices[voiceSelect.value] || allVoices.find(v => v.lang.includes('en-US'));
+}
+
+window.speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
+
+// ————————————————————————————————————————
+// 新版智能断句：只在真正句末拆分
+// 保护：时间 3:30、U.S.A.、a.m.、Jan.1st 等
+// ————————————————————————————————————————
+goBtn.addEventListener('click', () => {
+  const text = inputArea.value.trim();
+  if (!text) return;
+
+  const sentences = splitIntoRealSentences(text);
+  const totalWords = sentences.reduce((sum, seg) => sum + seg.split(/\s+/).filter(Boolean).length, 0); // 计算单词总数
+
+  // 渲染结果
+  renderResult(sentences);
+
+  // --- 新增：显示单词数量 ---
+  wordCountEl.textContent = `Total Words: ${totalWords}`;
+
+  // --- 新增：保存到历史记录 ---
+  saveToHistory(text, totalWords);
+
+  // --- 新增：滚动到结果区域 ---
+  scrollToResult();
+});
+
+// --- 新增：历史记录导航按钮事件监听 ---
+prevHistoryBtn.addEventListener('click', () => {
+  if (!prevHistoryBtn.classList.contains('disabled')) {
+    navigateHistory('prev');
+  }
+});
+nextHistoryBtn.addEventListener('click', () => {
+  if (!nextHistoryBtn.classList.contains('disabled')) {
+    navigateHistory('next');
+  }
+});
+
+// --- 新增：返回结果区按钮事件监听 ---
+backToTopBtn.addEventListener('click', scrollToResult);
+
+
+function splitIntoRealSentences(text) {
+  const s = text.replace(/\s+/g, ' ').trim();
+
+  // 1. 保护 时间 12:30 3:30 这类冒号
+  let t = s.replace(/(\d):(\d)/g, '$1⏱$2');
+
+  // 2. 保护内部点：U.S.A. a.m. p.m. Mr. Dr. Jan. Feb. 等
+  const protectPatterns = [
+    /\b([A-Z])\.([A-Z])\.([A-Z])\./gi,
+    /\b([A-Z])\.([A-Z])\./gi,
+    /\b[a-z]\.[a-z]\./gi,
+    /\b(Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\./gi
+  ];
+  protectPatterns.forEach(re => {
+    t = t.replace(re, m => m.replace(/\./g, '•'));
+  });
+
+  // 3. 只在 句末 . ! ? + 空格/结尾 处拆分
+  const parts = t.split(/(?<=[.!?])\s+/);
+
+  // 4. 还原符号
+  return parts.map(p =>
+    p.replace(/⏱/g, ':').replace(/•/g, '.').trim()
+  ).filter(Boolean);
+}
+
+// 点击标题朗读全文
+titleEl.addEventListener('click', () => {
+  const fullText = inputArea.value.trim();
+  if (!fullText) return;
+  stopSpeaking();
+  document.querySelectorAll('.sentence, .word').forEach(el => el.classList.remove('active'));
+  const u = new SpeechSynthesisUtterance(fullText);
+  u.voice = getSelectedVoice();
+  u.rate = 0.96;
+  u.pitch = 1.0;
+  window.speechSynthesis.speak(u);
+  currentUtterance = u;
+});
+
+function renderResult(segments) {
+  result.innerHTML = '';
+  segments.forEach(seg => {
+    const sentenceDiv = document.createElement('div');
+    sentenceDiv.className = 'sentence';
+
+    const speaker = document.createElement('div');
+    speaker.className = 'speaker';
+    speaker.textContent = '🔊';
+
+    const wordsDiv = document.createElement('div');
+    wordsDiv.style.width = '100%';
+
+    const words = seg.split(/\s+/).filter(Boolean);
+    words.forEach(word => {
+      const w = document.createElement('span');
+      w.className = 'word';
+      w.textContent = word;
+      w.onclick = (e) => {
+        e.stopPropagation();
+        speakWord(word, w);
+      };
+      wordsDiv.appendChild(w);
+      wordsDiv.appendChild(document.createTextNode(' '));
+    });
+
+    sentenceDiv.appendChild(speaker);
+    sentenceDiv.appendChild(wordsDiv);
+    
+    // 修复双击问题：在句子容器上统一处理单击和双击事件
+    let clickTimer = null;
+    let clickCount = 0;
+    
+    sentenceDiv.addEventListener('click', (e) => {
+      clickCount++;
+      if (clickCount === 1) {
+        // 第一次点击，设置定时器
+        clickTimer = setTimeout(() => {
+          // 单击逻辑
+          speakSentence(seg, sentenceDiv);
+          clickCount = 0;
+        }, 300);
+      } else if (clickCount === 2) {
+        // 双击逻辑
+        clearTimeout(clickTimer);
+        // 双击时直接重新朗读当前句子
+        stopSpeaking();
+        document.querySelectorAll('.sentence, .word').forEach(el => el.classList.remove('active'));
+        sentenceDiv.classList.add('active');
+        const u = new SpeechSynthesisUtterance(seg);
+        u.voice = getSelectedVoice();
+        u.rate = 0.96;
+        u.pitch = 1.0;
+        u.onend = () => sentenceDiv.classList.remove('active');
+        window.speechSynthesis.speak(u);
+        currentUtterance = u;
+        clickCount = 0;
+      }
+    });
+    
+    result.appendChild(sentenceDiv);
+  });
+  // 渲染完成后，更新历史导航按钮状态
+  updateHistoryNavButtons();
+}
+
+function speakSentence(text, sentenceEl) {
+  stopSpeaking();
+  document.querySelectorAll('.sentence, .word').forEach(el => el.classList.remove('active'));
+  const u = new SpeechSynthesisUtterance(text);
+  u.voice = getSelectedVoice();
+  u.rate = 0.96;
+  u.pitch = 1.0;
+  sentenceEl.classList.add('active');
+  u.onend = () => sentenceEl.classList.remove('active');
+  window.speechSynthesis.speak(u);
+  currentUtterance = u;
+}
+
+function speakWord(word, wordEl) {
+  stopSpeaking();
+  document.querySelectorAll('.sentence, .word').forEach(el => el.classList.remove('active'));
+  wordEl.classList.add('active');
+  const u = new SpeechSynthesisUtterance(word);
+  u.voice = getSelectedVoice();
+  u.rate = 0.9;
+  window.speechSynthesis.speak(u);
+}
+
+function stopSpeaking() {
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+  }
+}
+</script>
+</body>
+</html>
+
