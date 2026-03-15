@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>English Reader</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  background: #f7f8fa;
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+  position: relative;
+  padding-bottom: 20px;
+}
+
+.title {
+  text-align: center;
+  font-size: 32px;
+  font-weight: bold;
+  color: #2c3e50;
+  margin: 30px 0 20px;
+  cursor: pointer;
+}
+
+#voiceSelect {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  background: #fff;
+  outline: none;
+}
+
+#inputArea {
+  width: 100%;
+  height: 180px;
+  padding: 15px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  resize: vertical;
+  outline: none;
+  background: white;
+}
+
+#goBtn {
+  width: 100%;
+  padding: 14px;
+  font-size: 18px;
+  font-weight: 600;
+  background: #007aff;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  margin: 12px 0 12px;
+  cursor: pointer;
+}
+
+#wordCount {
+  text-align: center;
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 10px;
+  min-height: 24px;
+}
+
+#navHistory {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 25px;
+  gap: 8px;
+}
+
+.history-arrows {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+}
+
+.history-arrow {
+  font-size: 24px;
+  cursor: pointer;
+  color: #007aff;
+  user-select: none;
+  transition: opacity 0.2s;
+}
+.history-arrow:hover {
+  opacity: 0.8;
+}
+.history-arrow.disabled {
+  color: #007aff;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#historyTime {
+  font-size: 13px;
+  color: #888;
+  text-align: center;
+  min-height: 20px;
+}
+
+#result {
+  line-height: 1.8;
+  font-size: 18px;
+}
+
+.sentence {
+  display: flex;
+  align-items: center;
+  padding: 14px 12px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  background: #fff;
+  border: 1px solid #eee;
+  transition: background 0.2s;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sentence.active {
+  background: #e1f5fe;
+  border-color: #007aff;
+}
+
+.speaker {
+  margin-right: 12px;
+  font-size: 24px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.word {
+  display: inline-block;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.word.active {
+  background: #ffeb3b;
+  font-weight: 500;
+}
+
+/* 单独定位的两个垃圾箱按钮 */
+.trash-btn {
+  position: fixed;
+  bottom: 30px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #007aff;
+  color: white;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4);
+  transition: all 0.3s;
+  user-select: none;
+  z-index: 99;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(20px);
+}
+
+.trash-btn.show {
+  opacity: 0.9;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.trash-btn:hover {
+  opacity: 1;
+  transform: translateY(0) scale(1.08);
+  box-shadow: 0 6px 20px rgba(0, 122, 255, 0.5);
+}
+
+.trash-btn:active {
+  transform: translateY(0) scale(0.95);
+  box-shadow: 0 2px 10px rgba(0, 122, 255, 0.3);
+}
+
+.trash-btn.pressed {
+  background: #ff3b30;
+  box-shadow: 0 4px 15px rgba(255, 59, 48, 0.5);
+}
+
+/* 调整按钮位置，更靠里一些 */
+#trashBtnLeft {
+  left: 60px;
+}
+
+#trashBtnRight {
+  right: 60px;
+}
+
+/* 在移动设备上调整按钮位置 */
+@media (max-width: 768px) {
+  .trash-btn {
+    width: 55px;
+    height: 55px;
+    font-size: 24px;
+    bottom: 25px;
+  }
+  
+  #trashBtnLeft {
+    left: 40px;
+  }
+  
+  #trashBtnRight {
+    right: 40px;
+  }
+}
+
+@media (max-width: 480px) {
+  .trash-btn {
+    width: 50px;
+    height: 50px;
+    font-size: 22px;
+    bottom: 20px;
+  }
+  
+  #trashBtnLeft {
+    left: 30px;
+  }
+  
+  #trashBtnRight {
+    right: 30px;
+  }
+}
+
+#backToTopBtn {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #007aff;
+  color: white;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4);
+  transition: all 0.3s;
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%) translateY(20px);
+}
+#backToTopBtn.show {
+  opacity: 0.9;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+#backToTopBtn:hover {
+  opacity: 1;
+  transform: translateX(-50%) scale(1.08);
+  box-shadow: 0 6px 20px rgba(0, 122, 255, 0.5);
+}
+</style>
+</head>
+
+<body>
+  <div class="title">English Reader</div>
+
+  <select id="voiceSelect"></select>
+
+  <textarea id="inputArea" placeholder="Paste your English text here..."></textarea>
+  <button id="goBtn">Go</button>
+  <div id="wordCount"></div>
+  <div id="navHistory" style="display: none;">
+    <div class="history-arrows">
+      <span id="prevHistory" class="history-arrow">&#9664;&#xFE0E;</span>
+      <span id="nextHistory" class="history-arrow">&#9654;&#xFE0E;</span>
+    </div>
+    <div id="historyTime"></div>
+  </div>
+
+  <div id="result"></div>
+
+  <!-- 垃圾箱按钮 -->
+  <button id="trashBtnLeft" class="trash-btn" title="按住此按钮和右侧按钮删除当前记录">🗑️</button>
+  <button id="trashBtnRight" class="trash-btn" title="按住此按钮和左侧按钮删除当前记录">🗑️</button>
+
+  <button id="backToTopBtn" title="Back to result">↑</button>
+
+<script>
+const inputArea = document.getElementById('inputArea');
+const goBtn = document.getElementById('goBtn');
+const result = document.getElementById('result');
+const voiceSelect = document.getElementById('voiceSelect');
+const titleEl = document.querySelector('.title');
+const wordCountEl = document.getElementById('wordCount');
+const navHistoryEl = document.getElementById('navHistory');
+const prevHistoryBtn = document.getElementById('prevHistory');
+const nextHistoryBtn = document.getElementById('nextHistory');
+const historyTimeEl = document.getElementById('historyTime');
+const backToTopBtn = document.getElementById('backToTopBtn');
+// 垃圾箱按钮
+const trashBtnLeft = document.getElementById('trashBtnLeft');
+const trashBtnRight = document.getElementById('trashBtnRight');
+
+let allVoices = [];
+let currentUtterance = null;
+// 历史记录相关变量
+let historyIndex = -1;
+let historyList = [];
+const HISTORY_STORAGE_KEY = 'englishReaderHistory';
+
+// 垃圾箱按钮的按下状态跟踪
+let leftTrashPressed = false;
+let rightTrashPressed = false;
+let deleteInProgress = false;
+
+// 判断是否滚动到底部的函数
+function isAtBottom() {
+  const totalHeight = document.body.scrollHeight;
+  const scrollPosition = window.scrollY + window.innerHeight;
+  return scrollPosition >= totalHeight - 50;
+}
+
+// 更新按钮显示状态的函数
+function updateButtonVisibility() {
+  // 更新返回顶部按钮
+  if (window.scrollY > 200) {
+    backToTopBtn.classList.add('show');
+  } else {
+    backToTopBtn.classList.remove('show');
+  }
+  
+  // 更新垃圾箱按钮：只在滚动到底部时显示
+  if (isAtBottom()) {
+    trashBtnLeft.classList.add('show');
+    trashBtnRight.classList.add('show');
+  } else {
+    trashBtnLeft.classList.remove('show');
+    trashBtnRight.classList.remove('show');
+  }
+}
+
+// ————————— iPhone 防熄屏核心代码 —————————
+let wakeLock = null;
+async function requestWakeLock() {
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    console.log('屏幕已保持常亮');
+  } catch (err) {
+    console.log('无法保持常亮:', err);
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (wakeLock && document.visibilityState === 'visible') {
+    requestWakeLock();
+  }
+});
+window.addEventListener('load', requestWakeLock);
+// ————————— 防熄屏代码结束 —————————
+
+// 页面加载时自动显示上一次的历史记录结果
+function initPageWithLastResult() {
+  loadHistoryFromStorage();
+  
+  // 如果有历史记录，显示最后一条记录的结果，但保持输入框为空
+  if (historyList.length > 0 && historyIndex >= 0) {
+    const lastRecord = historyList[historyIndex];
+    
+    // 清空输入框（保持空白）
+    inputArea.value = '';
+    
+    // 处理并显示最后一条记录的结果
+    processText(lastRecord.text, false);
+    
+    // 更新历史导航按钮状态
+    updateHistoryNavButtons();
+  }
+}
+
+// 处理同时按住两个垃圾箱按钮的逻辑
+function setupTrashButtons() {
+  // 鼠标按下事件
+  trashBtnLeft.addEventListener('mousedown', () => {
+    leftTrashPressed = true;
+    trashBtnLeft.classList.add('pressed');
+    checkBothTrashPressed();
+  });
+  
+  trashBtnRight.addEventListener('mousedown', () => {
+    rightTrashPressed = true;
+    trashBtnRight.classList.add('pressed');
+    checkBothTrashPressed();
+  });
+  
+  // 鼠标松开/离开事件
+  const clearTrashPress = () => {
+    leftTrashPressed = false;
+    rightTrashPressed = false;
+    trashBtnLeft.classList.remove('pressed');
+    trashBtnRight.classList.remove('pressed');
+  };
+  
+  trashBtnLeft.addEventListener('mouseup', clearTrashPress);
+  trashBtnLeft.addEventListener('mouseleave', clearTrashPress);
+  trashBtnRight.addEventListener('mouseup', clearTrashPress);
+  trashBtnRight.addEventListener('mouseleave', clearTrashPress);
+  
+  // 触摸事件支持（移动端）
+  trashBtnLeft.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    leftTrashPressed = true;
+    trashBtnLeft.classList.add('pressed');
+    checkBothTrashPressed();
+  });
+  
+  trashBtnRight.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    rightTrashPressed = true;
+    trashBtnRight.classList.add('pressed');
+    checkBothTrashPressed();
+  });
+  
+  trashBtnLeft.addEventListener('touchend', clearTrashPress);
+  trashBtnRight.addEventListener('touchend', clearTrashPress);
+  trashBtnLeft.addEventListener('touchcancel', clearTrashPress);
+  trashBtnRight.addEventListener('touchcancel', clearTrashPress);
+}
+
+// 检查是否两个按钮都被按下
+function checkBothTrashPressed() {
+  // 如果已经在执行删除操作，或者两个按钮没有同时按下，则返回
+  if (deleteInProgress || !leftTrashPressed || !rightTrashPressed) {
+    return;
+  }
+  
+  // 防止重复触发
+  deleteInProgress = true;
+  
+  // 检查是否有历史记录可删除
+  if (historyList.length === 0 || historyIndex === -1) {
+    deleteInProgress = false;
+    clearTrashPressStates();
+    return;
+  }
+  
+  // 执行删除操作
+  deleteCurrentRecord();
+}
+
+// 清除按钮按下状态
+function clearTrashPressStates() {
+  leftTrashPressed = false;
+  rightTrashPressed = false;
+  trashBtnLeft.classList.remove('pressed');
+  trashBtnRight.classList.remove('pressed');
+  setTimeout(() => {
+    deleteInProgress = false;
+  }, 300);
+}
+
+// 删除当前记录并导航
+function deleteCurrentRecord() {
+  if (historyList.length === 0 || historyIndex === -1) {
+    clearTrashPressStates();
+    return;
+  }
+  
+  // 保存当前索引和列表长度
+  const currentIdx = historyIndex;
+  const totalRecords = historyList.length;
+  
+  // 从历史记录中删除当前条目
+  historyList.splice(currentIdx, 1);
+  
+  // 更新本地存储
+  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(historyList));
+  
+  // 确定要导航到的下一个索引
+  let newIndex = -1;
+  
+  if (historyList.length === 0) {
+    // 如果没有记录了，清空界面
+    newIndex = -1;
+    inputArea.value = '';
+    result.innerHTML = '';
+    wordCountEl.textContent = '';
+    historyTimeEl.textContent = '';
+    navHistoryEl.style.display = 'none';
+  } else {
+    // 尝试跳转到下一条记录
+    if (currentIdx < historyList.length) {
+      newIndex = currentIdx; // 删除后，同位置的元素已经是下一条记录
+    } else {
+      // 如果删除的是最后一条，则跳转到上一条
+      newIndex = historyList.length - 1;
+    }
+    
+    // 导航到新记录
+    historyIndex = newIndex;
+    const record = historyList[newIndex];
+    inputArea.value = record.text;
+    processText(record.text, false);
+  }
+  
+  // 滚动到结果区域
+  setTimeout(() => {
+    scrollToResult();
+    clearTrashPressStates();
+  }, 100);
+}
+
+function formatDateTime(timestamp) {
+  const date = new Date(timestamp);
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                  'July', 'August', 'September', 'October', 'November', 'December'];
+  
+  const dayName = days[date.getDay()];
+  const monthName = months[date.getMonth()];
+  const day = date.getDate();
+  const year = date.getFullYear();
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const seconds = date.getSeconds().toString().padStart(2, '0');
+  
+  return `${dayName}, ${monthName} ${day}, ${year}, ${hours}:${minutes}:${seconds}`;
+}
+
+function loadHistoryFromStorage() {
+  const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
+  if (stored) {
+    try {
+      historyList = JSON.parse(stored);
+      // 默认指向最新的记录（最后一条）
+      historyIndex = historyList.length - 1;
+    } catch (e) {
+      console.error('读取历史记录失败:', e);
+      historyList = [];
+      historyIndex = -1;
+    }
+  }
+}
+
+function saveToHistory(text, count) {
+  const newRecord = { 
+    text: text, 
+    wordCount: count, 
+    timestamp: Date.now() 
+  };
+  
+  // 如果和最后一条记录内容相同，则不重复保存
+  if (historyList.length > 0 && historyList[historyList.length - 1].text === text) {
+    return;
+  }
+  
+  historyList.push(newRecord);
+  // 限制历史记录条数为10条
+  if (historyList.length > 10) {
+    historyList.shift(); // 移除最旧的一条
+  }
+  historyIndex = historyList.length - 1; // 索引指向最新记录
+  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(historyList));
+  updateHistoryNavButtons(); // 更新导航按钮状态
+}
+
+function updateHistoryNavButtons() {
+  // 更新箭头按钮状态
+  prevHistoryBtn.classList.toggle('disabled', historyIndex <= 0);
+  nextHistoryBtn.classList.toggle('disabled', historyIndex >= historyList.length - 1);
+  
+  // 更新时间显示
+  if (historyIndex >= 0 && historyIndex < historyList.length) {
+    const currentRecord = historyList[historyIndex];
+    historyTimeEl.textContent = formatDateTime(currentRecord.timestamp);
+  } else {
+    historyTimeEl.textContent = '';
+  }
+  
+  // 如果没有历史记录，隐藏导航区域
+  navHistoryEl.style.display = historyList.length > 1 ? 'flex' : 'none';
+}
+
+function processText(text, isNewRecord = true) {
+  if (!text) return;
+
+  const sentences = splitIntoRealSentences(text);
+  const totalWords = sentences.reduce((sum, seg) => sum + seg.split(/\s+/).filter(Boolean).length, 0); // 计算单词总数
+
+  // 渲染结果
+  renderResult(sentences);
+
+  // 显示单词数量
+  wordCountEl.textContent = `Total Words: ${totalWords}`;
+
+  // 如果是新的输入，才保存到历史记录
+  if (isNewRecord) {
+    saveToHistory(text, totalWords);
+  }
+
+  // 滚动到结果区域
+  scrollToResult();
+}
+
+function navigateHistory(direction) {
+  if (direction === 'prev' && historyIndex > 0) {
+    historyIndex--;
+  } else if (direction === 'next' && historyIndex < historyList.length - 1) {
+    historyIndex++;
+  } else {
+    return; // 无法导航时直接返回，不循环
+  }
+  
+  const record = historyList[historyIndex];
+  // 导航时，输入框显示对应的历史记录文本
+  inputArea.value = record.text;
+  
+  // 使用抽离的核心处理方法，跳过"保存到历史记录"这一步
+  processText(record.text, false);
+  updateHistoryNavButtons();
+}
+
+function scrollToResult() {
+  result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 滚动事件监听
+window.addEventListener('scroll', updateButtonVisibility);
+
+// 初始化页面
+function initializePage() {
+  // 初始化垃圾箱按钮
+  setupTrashButtons();
+  // 加载语音
+  loadVoices();
+  // 加载历史记录并显示最后一条结果（输入框保持空白）
+  initPageWithLastResult();
+  // 初始检查按钮显示状态
+  updateButtonVisibility();
+}
+
+// 页面加载完成后初始化
+window.addEventListener('load', initializePage);
+
+function loadVoices() {
+  allVoices = window.speechSynthesis.getVoices();
+  voiceSelect.innerHTML = '';
+  allVoices.forEach((voice, i) => {
+    if (voice.lang.includes('en')) {
+      const option = document.createElement('option');
+      option.value = i;
+      option.textContent = `${voice.name} (${voice.lang})`;
+      voiceSelect.appendChild(option);
+    }
+  });
+  // 默认语音改为 Daniel
+  const danielIndex = allVoices.findIndex(v =>
+    v.name.includes('Daniel') && v.lang.includes('en')
+  );
+  if (danielIndex !== -1) {
+    voiceSelect.value = danielIndex;
+  } else {
+    // 如果找不到Daniel，回退到原来的Samantha逻辑
+    const samanthaIndex = allVoices.findIndex(v =>
+      v.name.includes('Samantha') && v.lang.includes('en-US')
+    );
+    if (samanthaIndex !== -1) {
+      voiceSelect.value = samanthaIndex;
+    }
+  }
+}
+
+function getSelectedVoice() {
+  return allVoices[voiceSelect.value] || allVoices.find(v => v.lang.includes('en-US'));
+}
+
+window.speechSynthesis.onvoiceschanged = loadVoices;
+
+goBtn.addEventListener('click', () => {
+  const text = inputArea.value.trim();
+  processText(text, true);
+});
+
+prevHistoryBtn.addEventListener('click', () => {
+  navigateHistory('prev');
+});
+nextHistoryBtn.addEventListener('click', () => {
+  navigateHistory('next');
+});
+
+backToTopBtn.addEventListener('click', scrollToResult);
+
+function splitIntoRealSentences(text) {
+  const s = text.replace(/\s+/g, ' ').trim();
+
+  // 1. 保护 时间 12:30 3:30 这类冒号
+  let t = s.replace(/(\d):(\d)/g, '$1⏱$2');
+
+  // 2. 保护内部点：U.S.A. a.m. p.m. Mr. Dr. Jan. Feb. 等
+  const protectPatterns = [
+    /\b([A-Z])\.([A-Z])\.([A-Z])\./gi,
+    /\b([A-Z])\.([A-Z])\./gi,
+    /\b[a-z]\.[a-z]\./gi,
+    /\b(Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\./gi
+  ];
+  protectPatterns.forEach(re => {
+    t = t.replace(re, m => m.replace(/\./g, '•'));
+  });
+
+  // 3. 只在 句末 . ! ? + 空格/结尾 处拆分
+  const parts = t.split(/(?<=[.!?])\s+/);
+
+  // 4. 还原符号
+  return parts.map(p =>
+    p.replace(/⏱/g, ':').replace(/•/g, '.').trim()
+  ).filter(Boolean);
+}
+
+// 点击标题朗读全文
+titleEl.addEventListener('click', () => {
+  const fullText = inputArea.value.trim();
+  if (!fullText) return;
+  stopSpeaking();
+  document.querySelectorAll('.sentence, .word').forEach(el => el.classList.remove('active'));
+  const u = new SpeechSynthesisUtterance(fullText);
+  u.voice = getSelectedVoice();
+  u.rate = 0.96;
+  u.pitch = 1.0;
+  window.speechSynthesis.speak(u);
+  currentUtterance = u;
+});
+
+function renderResult(segments) {
+  result.innerHTML = '';
+  segments.forEach(seg => {
+    const sentenceDiv = document.createElement('div');
+    sentenceDiv.className = 'sentence';
+
+    const speaker = document.createElement('div');
+    speaker.className = 'speaker';
+    speaker.textContent = '🔊';
+
+    const wordsDiv = document.createElement('div');
+    wordsDiv.style.width = '100%';
+
+    const words = seg.split(/\s+/).filter(Boolean);
+    words.forEach(word => {
+      const w = document.createElement('span');
+      w.className = 'word';
+      w.textContent = word;
+      w.onclick = (e) => {
+        e.stopPropagation();
+        speakWord(word, w);
+      };
+      wordsDiv.appendChild(w);
+      wordsDiv.appendChild(document.createTextNode(' '));
+    });
+
+    sentenceDiv.appendChild(speaker);
+    sentenceDiv.appendChild(wordsDiv);
+    
+    // 单击空白处或喇叭，打断并朗读
+    sentenceDiv.addEventListener('click', (e) => {
+      if (e.target.classList.contains('word')) return;
+      speakSentence(seg, sentenceDiv);
+    });
+
+    // 双击空白处或喇叭，打断并重新朗读
+    sentenceDiv.addEventListener('dblclick', (e) => {
+      if (e.target.classList.contains('word')) return;
+      // 清除双击可能造成的文本选中高亮，让体验更佳
+      window.getSelection().removeAllRanges();
+      speakSentence(seg, sentenceDiv);
+    });
+    
+    result.appendChild(sentenceDiv);
+  });
+  // 渲染完成后，更新历史导航按钮状态
+  updateHistoryNavButtons();
+}
+
+function speakSentence(text, sentenceEl) {
+  stopSpeaking();
+  document.querySelectorAll('.sentence, .word').forEach(el => el.classList.remove('active'));
+  const u = new SpeechSynthesisUtterance(text);
+  u.voice = getSelectedVoice();
+  u.rate = 0.96;
+  u.pitch = 1.0;
+  sentenceEl.classList.add('active');
+  u.onend = () => sentenceEl.classList.remove('active');
+  window.speechSynthesis.speak(u);
+  currentUtterance = u;
+}
+
+function speakWord(word, wordEl) {
+  stopSpeaking();
+  document.querySelectorAll('.sentence, .word').forEach(el => el.classList.remove('active'));
+  wordEl.classList.add('active');
+  const u = new SpeechSynthesisUtterance(word);
+  u.voice = getSelectedVoice();
+  u.rate = 0.9;
+  window.speechSynthesis.speak(u);
+  currentUtterance = u;
+}
+
+// 修复的stopSpeaking函数：确保重置currentUtterance
+function stopSpeaking() {
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    currentUtterance = null; // 重置当前话语，避免状态冲突
+  }
+}
+</script>
+</body>
+</html>
+
