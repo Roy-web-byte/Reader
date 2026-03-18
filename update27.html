@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="shortcut icon" href="https://github.githubassets.com/favicon.ico" type="image/x-icon">
+<link rel="icon" href="https://github.githubassets.com/favicon.ico" type="image/x-icon">
+<title>English Reader</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+body {
+  background: #f7f8fa;
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+  position: relative;
+  padding-bottom: 20px;
+}
+.title {
+  text-align: center;
+  font-size: 32px;
+  font-weight: bold;
+  color: #2c3e50;
+  margin: 30px 0 20px;
+  cursor: pointer;
+}
+#voiceSelect {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  background: #fff;
+  outline: none;
+}
+#inputArea {
+  width: 100%;
+  height: 180px;
+  padding: 15px;
+  font-size: 17px;
+  line-height: 1.5;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  resize: vertical;
+  outline: none;
+  background: white;
+  color: #333;
+}
+#inputArea::placeholder {
+  color: #888;
+  opacity: 1;
+  font-size: 16px;
+}
+#goBtn {
+  width: 100%;
+  padding: 14px;
+  font-size: 18px;
+  font-weight: 600;
+  background: #007aff;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  margin: 12px 0 12px;
+  cursor: pointer;
+}
+#wordCount {
+  text-align: center;
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 10px;
+  min-height: 24px;
+}
+#navHistory {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 25px;
+  gap: 8px;
+}
+.history-arrows {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+}
+.history-arrow {
+  font-size: 24px;
+  cursor: pointer;
+  color: #007aff;
+  user-select: none;
+  transition: opacity 0.2s;
+}
+.history-arrow:hover {
+  opacity: 0.8;
+}
+.history-arrow.disabled {
+  color: #007aff;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+#historyTime {
+  font-size: 13px;
+  color: #888;
+  text-align: center;
+  min-height: 20px;
+}
+#result {
+  line-height: 1.8;
+  font-size: 18px;
+  margin-bottom: 20px;
+  padding-bottom: 120px;
+}
+#result.has-new-words {
+  padding-bottom: 20px;
+}
+.sentence {
+  display: flex;
+  align-items: center;
+  padding: 14px 12px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  background: #fff;
+  border: 1px solid #eee;
+  transition: background 0.2s;
+  cursor: pointer;
+  user-select: none;
+}
+.sentence.active {
+  background: #e1f5fe;
+  border-color: #007aff;
+}
+.speaker {
+  margin-right: 12px;
+  font-size: 24px;
+  user-select: none;
+  flex-shrink: 0;
+}
+.word {
+  display: inline-block;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.word.active {
+  background: #ffeb3b;
+  font-weight: 500;
+}
+.word.selected {
+  background-color: rgba(0, 122, 255, 0.2);
+  border: 1px solid #007aff;
+}
+/* 新增：连读下划线样式 - 黑色下划线，不影响原有交互 */
+.link-phonetic {
+  text-decoration: underline solid black;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+/* 生词区样式 */
+#newWordsArea {
+  margin-top: 30px;
+  padding-top: 20px;
+  padding-bottom: 100px;
+  border-top: 2px solid #e0e0e0;
+  min-height: 100px;
+}
+.new-words-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#newWordsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+  min-height: 40px;
+}
+.new-word-item {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #f0f7ff;
+  border: 1px solid #c2e0ff;
+  border-radius: 20px;
+  font-size: 16px;
+  color: #0066cc;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+.new-word-item:hover {
+  background-color: #e1f0ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 102, 204, 0.1);
+}
+#addWordBtn {
+  position: fixed;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #007aff;
+  color: white;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4);
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  user-select: none;
+}
+#removeWordBtn {
+  position: fixed;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #007aff;
+  color: white;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4);
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  user-select: none;
+}
+#addWordBtn.show, #removeWordBtn.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+#addWordBtn:hover, #removeWordBtn:hover {
+  opacity: 0.9;
+  transform: translateX(-50%) scale(1.08);
+  box-shadow: 0 6px 20px rgba(0, 122, 255, 0.5);
+}
+.trash-btn {
+  position: fixed;
+  bottom: 30px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #007aff;
+  color: white;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4);
+  transition: all 0.3s;
+  user-select: none;
+  z-index: 99;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(20px);
+}
+.trash-btn.show {
+  opacity: 0.9;
+  visibility: visible;
+  transform: translateY(0);
+}
+.trash-btn:hover {
+  opacity: 1;
+  transform: translateY(0) scale(1.08);
+  box-shadow: 0 6px 20px rgba(0, 122, 255, 0.5);
+}
+.trash-btn:active {
+  transform: translateY(0) scale(0.95);
+  box-shadow: 0 2px 10px rgba(0, 122, 255, 0.3);
+}
+.trash-btn.pressed {
+  background: #ff3b30;
+  box-shadow: 0 4px 15px rgba(255, 59, 48, 0.5);
+}
+#trashBtnLeft {
+  left: 60px;
+}
+#trashBtnRight {
+  right: 60px;
+}
+#backToTopBtn {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #007aff;
+  color: white;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4);
+  transition: all 0.3s;
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%) translateY(20px);
+}
+#backToTopBtn.show {
+  opacity: 0.9;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+#backToTopBtn:hover {
+  opacity: 1;
+  transform: translateX(-50%) scale(1.08);
+  box-shadow: 0 6px 20px rgba(0, 122, 255, 0.5);
+}
+@media (max-width: 768px) {
+  .trash-btn {
+    width: 55px;
+    height: 55px;
+    font-size: 24px;
+    bottom: 25px;
+  }
+  #trashBtnLeft {
+    left: 40px;
+  }
+  #trashBtnRight {
+    right: 40px;
+  }
+  #inputArea {
+    font-size: 16px;
+  }
+  #addWordBtn, #removeWordBtn {
+    top: 80px;
+    width: 55px;
+    height: 55px;
+    font-size: 24px;
+  }
+  #result {
+    padding-bottom: 110px;
+  }
+  #newWordsArea {
+    padding-bottom: 90px;
+  }
+}
+@media (max-width: 480px) {
+  .trash-btn {
+    width: 50px;
+    height: 50px;
+    font-size: 22px;
+    bottom: 20px;
+  }
+  #trashBtnLeft {
+    left: 30px;
+  }
+  #trashBtnRight {
+    right: 30px;
+  }
+  #inputArea {
+    font-size: 16px;
+    height: 160px;
+  }
+  #inputArea::placeholder {
+    font-size: 15px;
+  }
+  #addWordBtn, #removeWordBtn {
+    top: 70px;
+    width: 50px;
+    height: 50px;
+    font-size: 22px;
+  }
+  #result {
+    padding-bottom: 100px;
+  }
+  #newWordsArea {
+    padding-bottom: 80px;
+  }
+}
+</style>
+</head>
+<body>
+  <div class="title">English Reader</div>
+  <select id="voiceSelect"></select>
+  <textarea id="inputArea" placeholder="Paste your English text here..."></textarea>
+  <button id="goBtn">Go</button>
+  <div id="wordCount"></div>
+  <div id="navHistory" style="display: none;">
+    <div class="history-arrows">
+      <span id="prevHistory" class="history-arrow">&#9664;&#xFE0E;</span>
+      <span id="nextHistory" class="history-arrow">&#9654;&#xFE0E;</span>
+    </div>
+    <div id="historyTime"></div>
+  </div>
+  <div id="result"></div>
+  
+  <div id="newWordsArea" style="display: none;">
+    <div class="new-words-title">
+      <span>📚 New Words</span>
+    </div>
+    <div id="newWordsList"></div>
+  </div>
+  <button id="addWordBtn" title="Add to new words">+</button>
+  <button id="removeWordBtn" title="Remove from new words">−</button>
+  <button id="trashBtnLeft" class="trash-btn" title="按住此按钮和右侧按钮删除当前记录">🗑️</button>
+  <button id="trashBtnRight" class="trash-btn" title="按住此按钮和左侧按钮删除当前记录">🗑️</button>
+  <button id="backToTopBtn" title="Back to result">↑</button>
+<script>
+const inputArea = document.getElementById('inputArea');
+const goBtn = document.getElementById('goBtn');
+const result = document.getElementById('result');
+const voiceSelect = document.getElementById('voiceSelect');
+const titleEl = document.querySelector('.title');
+const wordCountEl = document.getElementById('wordCount');
+const navHistoryEl = document.getElementById('navHistory');
+const prevHistoryBtn = document.getElementById('prevHistory');
+const nextHistoryBtn = document.getElementById('nextHistory');
+const historyTimeEl = document.getElementById('historyTime');
+const backToTopBtn = document.getElementById('backToTopBtn');
+const trashBtnLeft = document.getElementById('trashBtnLeft');
+const trashBtnRight = document.getElementById('trashBtnRight');
+const newWordsArea = document.getElementById('newWordsArea');
+const newWordsList = document.getElementById('newWordsList');
+const addWordBtn = document.getElementById('addWordBtn');
+const removeWordBtn = document.getElementById('removeWordBtn');
+let allVoices = [];
+let currentUtterance = null;
+let historyIndex = -1;
+let historyList = [];
+const HISTORY_STORAGE_KEY = 'englishReaderHistory';
+const CURRENT_INDEX_KEY = 'englishReaderCurrentIndex';
+let leftTrashPressed = false;
+let rightTrashPressed = false;
+let deleteInProgress = false;
+let currentSelectedWord = '';
+let isNewWordSelection = true;
+
+// ————————— 新增核心：英语全连读规则解析 —————————
+// 1. 音素辅助：判断单词首尾音素（辅音/元音/r/re/半元音/爆破音）
+const VOWEL_CHARS = ['a','e','i','o','u','A','E','I','O','U'];
+const BLAST_CONSONANTS = ['p','b','t','d','k','g','P','B','T','D','K','G'];
+const Y_CONSONANT = ['y','Y'];
+// 清理单词标点（保留单词本身）
+const cleanWord = (word) => word.replace(/[^a-zA-Z]/g, '');
+// 判断单词结尾是否为辅音（非r/y）
+const isEndWithConsonant = (word) => {
+  const clean = cleanWord(word);
+  if (clean.length < 1) return false;
+  const last = clean[clean.length-1];
+  return !VOWEL_CHARS.includes(last) && !['r','R','y','Y'].includes(last);
+};
+// 判断单词开头是否为元音
+const isStartWithVowel = (word) => {
+  const clean = cleanWord(word);
+  if (clean.length < 1) return false;
+  const first = clean[0];
+  return VOWEL_CHARS.includes(first) || Y_CONSONANT.includes(first);
+};
+// 判断单词结尾是否为r/re
+const isEndWithR = (word) => {
+  const clean = cleanWord(word);
+  if (clean.length < 1) return false;
+  const last = clean[clean.length-1];
+  return last === 'r' || last === 'R';
+};
+// 判断单词结尾是否为爆破音
+const isEndWithBlast = (word) => {
+  const clean = cleanWord(word);
+  if (clean.length < 1) return false;
+  const last = clean[clean.length-1];
+  return BLAST_CONSONANTS.includes(last);
+};
+// 判断单词开头是否为爆破音/摩擦音/破擦音
+const isStartWithBlastOrFriction = (word) => {
+  const clean = cleanWord(word);
+  if (clean.length < 1) return false;
+  const first = clean[0];
+  return BLAST_CONSONANTS.includes(first) || ['f','v','s','z','h','l','m','n','F','V','S','Z','H','L','M','N'].includes(first);
+};
+// 判断是否为/t/d/ + /j/ 连读
+const isTJDJLink = (prevWord, nextWord) => {
+  const pClean = cleanWord(prevWord);
+  const nClean = cleanWord(nextWord);
+  if (pClean.length <1 || nClean.length <1) return false;
+  const pLast = pClean[pClean.length-1];
+  const nFirst = nClean[0];
+  return (pLast === 't' || pLast === 'd' || pLast === 'T' || pLast === 'D') && (nFirst === 'y' || nFirst === 'Y');
+};
+// 2. 核心：生成句子的连读分组（按规则解析，返回分组数组）
+const getLinkPhoneticGroups = (sentenceWords) => {
+  const groups = [];
+  let currentGroup = [sentenceWords[0]];
+  if (sentenceWords.length <= 1) {
+    groups.push({ words: currentGroup, isLinked: false });
+    return groups;
+  }
+  // 遍历单词，按连读规则分组
+  for (let i = 1; i < sentenceWords.length; i++) {
+    const prevWord = sentenceWords[i-1];
+    const currWord = sentenceWords[i];
+    // 匹配任意一条连读规则即合并为同一分组
+    const isLinked = 
+      (isEndWithConsonant(prevWord) && isStartWithVowel(currWord)) || // 辅音+元音
+      (isEndWithR(prevWord) && isStartWithVowel(currWord)) ||         // r/re+元音
+      (isStartWithVowel(prevWord) && isStartWithVowel(currWord)) ||   // 元音+元音
+      isTJDJLink(prevWord, currWord) ||                               // t/d + j
+      (isEndWithBlast(prevWord) && isStartWithBlastOrFriction(currWord)); // 爆破音失爆
+    if (isLinked) {
+      currentGroup.push(currWord);
+    } else {
+      groups.push({ words: currentGroup, isLinked: currentGroup.length > 1 });
+      currentGroup = [currWord];
+    }
+  }
+  // 加入最后一个分组
+  groups.push({ words: currentGroup, isLinked: currentGroup.length > 1 });
+  return groups;
+};
+// 3. 批量生成所有句子的连读分组
+const generateAllLinkPhoneticData = (sentences) => {
+  return sentences.map(sentence => {
+    const words = sentence.split(/\s+/).filter(Boolean);
+    return getLinkPhoneticGroups(words);
+  });
+};
+// ————————— 连读规则解析结束 —————————
+
+function isAtBottom() {
+  const totalHeight = document.body.scrollHeight;
+  const scrollPosition = window.scrollY + window.innerHeight;
+  return scrollPosition >= totalHeight - 50;
+}
+function updateButtonVisibility() {
+  if (window.scrollY > 200) {
+    backToTopBtn.classList.add('show');
+  } else {
+    backToTopBtn.classList.remove('show');
+  }
+  if (isAtBottom()) {
+    trashBtnLeft.classList.add('show');
+    trashBtnRight.classList.add('show');
+  } else {
+    trashBtnLeft.classList.remove('show');
+    trashBtnRight.classList.remove('show');
+  }
+}
+let wakeLock = null;
+async function requestWakeLock() {
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    console.log('屏幕已保持常亮');
+  } catch (err) {
+    console.log('无法保持常亮:', err);
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (wakeLock && document.visibilityState === 'visible') {
+    requestWakeLock();
+  }
+});
+window.addEventListener('load', requestWakeLock);
+function saveCurrentState() {
+  localStorage.setItem(CURRENT_INDEX_KEY, historyIndex.toString());
+}
+// 修改：初始化页面适配连读数据
+function initPageWithLastResult() {
+  loadHistoryFromStorage();
+  if (historyList.length > 0 && historyIndex >= 0 && historyIndex < historyList.length) {
+    const currentRecord = historyList[historyIndex];
+    inputArea.value = '';
+    // 传入历史记录中的连读数据
+    processText(currentRecord.text, false, currentRecord.linkPhoneticData);
+    updateHistoryNavButtons();
+    updateNewWordsArea();
+  } else if (historyList.length > 0 && historyIndex === -1) {
+    historyIndex = historyList.length - 1;
+    const lastRecord = historyList[historyIndex];
+    inputArea.value = '';
+    processText(lastRecord.text, false, lastRecord.linkPhoneticData);
+    updateHistoryNavButtons();
+    updateNewWordsArea();
+    saveCurrentState();
+  }
+}
+function setupTrashButtons() {
+  trashBtnLeft.addEventListener('mousedown', () => {
+    leftTrashPressed = true;
+    trashBtnLeft.classList.add('pressed');
+    checkBothTrashPressed();
+  });
+  trashBtnRight.addEventListener('mousedown', () => {
+    rightTrashPressed = true;
+    trashBtnRight.classList.add('pressed');
+    checkBothTrashPressed();
+  });
+  const clearTrashPress = () => {
+    leftTrashPressed = false;
+    rightTrashPressed = false;
+    trashBtnLeft.classList.remove('pressed');
+    trashBtnRight.classList.remove('pressed');
+  };
+  trashBtnLeft.addEventListener('mouseup', clearTrashPress);
+  trashBtnLeft.addEventListener('mouseleave', clearTrashPress);
+  trashBtnRight.addEventListener('mouseup', clearTrashPress);
+  trashBtnRight.addEventListener('mouseleave', clearTrashPress);
+  trashBtnLeft.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    leftTrashPressed = true;
+    trashBtnLeft.classList.add('pressed');
+    checkBothTrashPressed();
+  });
+  trashBtnRight.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    rightTrashPressed = true;
+    trashBtnRight.classList.add('pressed');
+    checkBothTrashPressed();
+  });
+  trashBtnLeft.addEventListener('touchend', clearTrashPress);
+  trashBtnRight.addEventListener('touchend', clearTrashPress);
+  trashBtnLeft.addEventListener('touchcancel', clearTrashPress);
+  trashBtnRight.addEventListener('touchcancel', clearTrashPress);
+}
+function checkBothTrashPressed() {
+  if (deleteInProgress || !leftTrashPressed || !rightTrashPressed) {
+    return;
+  }
+  deleteInProgress = true;
+  if (historyList.length === 0 || historyIndex === -1) {
+    deleteInProgress = false;
+    clearTrashPressStates();
+    return;
+  }
+  deleteCurrentRecord();
+}
+function clearTrashPressStates() {
+  leftTrashPressed = false;
+  rightTrashPressed = false;
+  trashBtnLeft.classList.remove('pressed');
+  trashBtnRight.classList.remove('pressed');
+  setTimeout(() => {
+    deleteInProgress = false;
+  }, 300);
+}
+function deleteCurrentRecord() {
+  if (historyList.length === 0 || historyIndex === -1) {
+    clearTrashPressStates();
+    return;
+  }
+  const currentIdx = historyIndex;
+  const totalRecords = historyList.length;
+  historyList.splice(currentIdx, 1);
+  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(historyList));
+  let newIndex = -1;
+  if (historyList.length === 0) {
+    newIndex = -1;
+    inputArea.value = '';
+    result.innerHTML = '';
+    wordCountEl.textContent = '';
+    historyTimeEl.textContent = '';
+    navHistoryEl.style.display = 'none';
+    newWordsArea.style.display = 'none';
+  } else {
+    if (currentIdx < historyList.length) {
+      newIndex = currentIdx;
+    } else {
+      newIndex = historyList.length - 1;
+    }
+    historyIndex = newIndex;
+    const record = historyList[newIndex];
+    inputArea.value = '';
+    // 传入连读数据渲染
+    processText(record.text, false, record.linkPhoneticData);
+  }
+  saveCurrentState();
+  setTimeout(() => {
+    scrollToResult();
+    clearTrashPressStates();
+  }, 100);
+}
+function formatDateTime(timestamp) {
+  const date = new Date(timestamp);
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                  'July', 'August', 'September', 'October', 'November', 'December'];
+  const dayName = days[date.getDay()];
+  const monthName = months[date.getMonth()];
+  const day = date.getDate();
+  const year = date.getFullYear();
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const seconds = date.getSeconds().toString().padStart(2, '0');
+  return `${dayName}, ${monthName} ${day}, ${year}, ${hours}:${minutes}:${seconds}`;
+}
+function loadHistoryFromStorage() {
+  const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
+  if (stored) {
+    try {
+      historyList = JSON.parse(stored);
+      const savedIndex = localStorage.getItem(CURRENT_INDEX_KEY);
+      if (savedIndex !== null && savedIndex !== undefined) {
+        const parsedIndex = parseInt(savedIndex, 10);
+        if (parsedIndex >= 0 && parsedIndex < historyList.length) {
+          historyIndex = parsedIndex;
+        } else {
+          historyIndex = historyList.length - 1;
+        }
+      } else {
+        historyIndex = historyList.length - 1;
+      }
+    } catch (e) {
+      console.error('读取历史记录失败:', e);
+      historyList = [];
+      historyIndex = -1;
+    }
+  }
+}
+// 修改：保存历史记录时加入连读数据
+function saveToHistory(text, count, linkPhoneticData) {
+  const newRecord = { 
+    text: text, 
+    wordCount: count, 
+    timestamp: Date.now(),
+    newWords: [],
+    linkPhoneticData: linkPhoneticData // 新增：存储连读分组数据
+  };
+  if (historyList.length > 0 && historyList[historyList.length - 1].text === text) {
+    return;
+  }
+  historyList.push(newRecord);
+  if (historyList.length > 10) {
+    historyList.shift();
+  }
+  historyIndex = historyList.length - 1;
+  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(historyList));
+  saveCurrentState();
+  updateHistoryNavButtons();
+}
+function updateHistoryNavButtons() {
+  prevHistoryBtn.classList.toggle('disabled', historyIndex <= 0);
+  nextHistoryBtn.classList.toggle('disabled', historyIndex >= historyList.length - 1);
+  if (historyIndex >= 0 && historyIndex < historyList.length) {
+    const currentRecord = historyList[historyIndex];
+    historyTimeEl.textContent = formatDateTime(currentRecord.timestamp);
+  } else {
+    historyTimeEl.textContent = '';
+  }
+  navHistoryEl.style.display = historyList.length > 1 ? 'flex' : 'none';
+}
+function showAddButton(x, y, selectedText) {
+  removeWordBtn.classList.remove('show');
+  currentSelectedWord = selectedText.trim();
+  isNewWordSelection = true;
+  addWordBtn.classList.add('show');
+  if (historyIndex >= 0 && historyIndex < historyList.length) {
+    const currentRecord = historyList[historyIndex];
+    if (currentRecord.newWords && currentRecord.newWords.includes(currentSelectedWord)) {
+      addWordBtn.classList.remove('show');
+    }
+  }
+}
+function showRemoveButton(x, y, selectedText) {
+  addWordBtn.classList.remove('show');
+  currentSelectedWord = selectedText.trim();
+  isNewWordSelection = false;
+  removeWordBtn.classList.add('show');
+}
+function hideAllActionButtons() {
+  addWordBtn.classList.remove('show');
+  removeWordBtn.classList.remove('show');
+  currentSelectedWord = '';
+}
+function addToNewWords() {
+  if (!currentSelectedWord || !isNewWordSelection) return;
+  if (historyIndex >= 0 && historyIndex < historyList.length) {
+    const currentRecord = historyList[historyIndex];
+    if (!currentRecord.newWords) {
+      currentRecord.newWords = [];
+    }
+    if (!currentRecord.newWords.includes(currentSelectedWord)) {
+      currentRecord.newWords.push(currentSelectedWord);
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(historyList));
+      updateNewWordsArea();
+    }
+    addWordBtn.classList.remove('show');
+    currentSelectedWord = '';
+  }
+}
+function removeFromNewWords() {
+  if (!currentSelectedWord || isNewWordSelection) return;
+  if (historyIndex >= 0 && historyIndex < historyList.length) {
+    const currentRecord = historyList[historyIndex];
+    if (currentRecord.newWords && currentRecord.newWords.length > 0) {
+      const index = currentRecord.newWords.indexOf(currentSelectedWord);
+      if (index !== -1) {
+        currentRecord.newWords.splice(index, 1);
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(historyList));
+        updateNewWordsArea();
+      }
+    }
+    removeWordBtn.classList.remove('show');
+    currentSelectedWord = '';
+  }
+}
+function updateNewWordsArea() {
+  if (historyIndex >= 0 && historyIndex < historyList.length) {
+    const currentRecord = historyList[historyIndex];
+    if (currentRecord.newWords && currentRecord.newWords.length > 0) {
+      newWordsList.innerHTML = '';
+      currentRecord.newWords.forEach(word => {
+        const wordEl = document.createElement('div');
+        wordEl.className = 'new-word-item';
+        wordEl.textContent = word;
+        wordEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          speakWord(word, wordEl);
+        });
+        wordEl.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          showRemoveButton(e.clientX, e.clientY, word);
+        });
+        let longPressTimer;
+        wordEl.addEventListener('touchstart', (e) => {
+          longPressTimer = setTimeout(() => {
+            e.preventDefault();
+            showRemoveButton(e.touches[0].clientX, e.touches[0].clientY, word);
+          }, 500);
+        });
+        wordEl.addEventListener('touchend', () => {
+          clearTimeout(longPressTimer);
+        });
+        wordEl.addEventListener('touchmove', () => {
+          clearTimeout(longPressTimer);
+        });
+        newWordsList.appendChild(wordEl);
+      });
+      newWordsArea.style.display = 'block';
+      result.classList.add('has-new-words');
+    } else {
+      newWordsArea.style.display = 'none';
+      result.classList.remove('has-new-words');
+    }
+  } else {
+    newWordsArea.style.display = 'none';
+    result.classList.remove('has-new-words');
+  }
+}
+// 修改：processText新增连读数据参数，无则生成，有则使用
+function processText(text, isNewRecord = true, linkPhoneticData = null) {
+  if (!text) return;
+  const sentences = splitIntoRealSentences(text);
+  const totalWords = sentences.reduce((sum, seg) => sum + seg.split(/\s+/).filter(Boolean).length, 0);
+  // 无连读数据则生成，有则直接使用
+  const finalLinkData = linkPhoneticData || generateAllLinkPhoneticData(sentences);
+  // 传入连读数据渲染
+  renderResult(sentences, finalLinkData);
+  wordCountEl.textContent = `Total Words: ${totalWords}`;
+  if (isNewRecord) {
+    saveToHistory(text, totalWords, finalLinkData); // 保存连读数据
+  }
+  updateNewWordsArea();
+  scrollToResult();
+}
+// 修改：导航历史时传入连读数据
+function navigateHistory(direction) {
+  if (direction === 'prev' && historyIndex > 0) {
+    historyIndex--;
+  } else if (direction === 'next' && historyIndex < historyList.length - 1) {
+    historyIndex++;
+  } else {
+    return;
+  }
+  const record = historyList[historyIndex];
+  inputArea.value = '';
+  // 传入历史连读数据
+  processText(record.text, false, record.linkPhoneticData);
+  updateHistoryNavButtons();
+  saveCurrentState();
+}
+function scrollToResult() {
+  result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+window.addEventListener('scroll', updateButtonVisibility);
+function initializePage() {
+  setupTrashButtons();
+  loadVoices();
+  initPageWithLastResult();
+  updateButtonVisibility();
+  addWordBtn.addEventListener('click', addToNewWords);
+  removeWordBtn.addEventListener('click', removeFromNewWords);
+  document.addEventListener('click', (e) => {
+    if (!addWordBtn.contains(e.target) && !removeWordBtn.contains(e.target)) {
+      if (!e.target.classList.contains('word') && !e.target.classList.contains('new-word-item')) {
+        hideAllActionButtons();
+      }
+    }
+  });
+  document.addEventListener('selectionchange', () => {
+    const selection = window.getSelection();
+    const selectedText = selection.toString().trim();
+    if (selectedText.length > 0) {
+      const resultArea = document.getElementById('result');
+      const newWordsArea = document.getElementById('newWordsArea');
+      const range = selection.getRangeAt(0);
+      const selectedNode = range.commonAncestorContainer;
+      if (resultArea.contains(selectedNode) || resultArea === selectedNode) {
+        const rangeRect = range.getBoundingClientRect();
+        if (rangeRect) {
+          const x = rangeRect.left + rangeRect.width / 2;
+          const y = rangeRect.top;
+          showAddButton(x, y, selectedText);
+        }
+      } else if (newWordsArea.contains(selectedNode) || newWordsArea === selectedNode) {
+        const rangeRect = range.getBoundingClientRect();
+        if (rangeRect) {
+          const x = rangeRect.left + rangeRect.width / 2;
+          const y = rangeRect.top;
+          showRemoveButton(x, y, selectedText);
+        }
+      } else {
+        hideAllActionButtons();
+      }
+    } else {
+      hideAllActionButtons();
+    }
+  });
+  document.addEventListener('contextmenu', () => {
+    setTimeout(() => {
+      hideAllActionButtons();
+    }, 10);
+  });
+  document.addEventListener('speechstart', () => {
+    hideAllActionButtons();
+  });
+}
+window.addEventListener('load', initializePage);
+function loadVoices() {
+  allVoices = window.speechSynthesis.getVoices();
+  voiceSelect.innerHTML = '';
+  allVoices.forEach((voice, i) => {
+    if (voice.lang.includes('en')) {
+      const option = document.createElement('option');
+      option.value = i;
+      option.textContent = `${voice.name} (${voice.lang})`;
+      voiceSelect.appendChild(option);
+    }
+  });
+  const danielIndex = allVoices.findIndex(v =>
+    v.name.includes('Daniel') && v.lang.includes('en')
+  );
+  if (danielIndex !== -1) {
+    voiceSelect.value = danielIndex;
+  } else {
+    const samanthaIndex = allVoices.findIndex(v =>
+      v.name.includes('Samantha') && v.lang.includes('en-US')
+    );
+    if (samanthaIndex !== -1) {
+      voiceSelect.value = samanthaIndex;
+    }
+  }
+}
+function getSelectedVoice() {
+  return allVoices[voiceSelect.value] || allVoices.find(v => v.lang.includes('en-US'));
+}
+window.speechSynthesis.onvoiceschanged = loadVoices;
+goBtn.addEventListener('click', () => {
+  const text = inputArea.value.trim();
+  if (text) {
+    processText(text, true);
+    inputArea.value = '';
+  }
+});
+prevHistoryBtn.addEventListener('click', () => {
+  navigateHistory('prev');
+});
+nextHistoryBtn.addEventListener('click', () => {
+  navigateHistory('next');
+});
+backToTopBtn.addEventListener('click', scrollToResult);
+function splitIntoRealSentences(text) {
+  const s = text.replace(/\s+/g, ' ').trim();
+  let t = s.replace(/(\d):(\d)/g, '$1⏱$2');
+  const protectPatterns = [
+    /\b([A-Z])\.([A-Z])\.([A-Z])\./gi,
+    /\b([A-Z])\.([A-Z])\./gi,
+    /\b[a-z]\.[a-z]\./gi,
+    /\b(Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\./gi
+  ];
+  protectPatterns.forEach(re => {
+    t = t.replace(re, m => m.replace(/\./g, '•'));
+  });
+  const parts = t.split(/(?<=[.!?])\s+/);
+  return parts.map(p =>
+    p.replace(/⏱/g, ':').replace(/•/g, '.').trim()
+  ).filter(Boolean);
+}
+titleEl.addEventListener('click', () => {
+  const sentenceElements = document.querySelectorAll('#result .sentence');
+  if (sentenceElements.length === 0) return;
+  const sentences = Array.from(sentenceElements).map(sentenceEl => {
+    const wordsDiv = sentenceEl.children[1];
+    return wordsDiv.textContent.trim();
+  });
+  const fullText = sentences.join(' ');
+  if (!fullText) return;
+  stopSpeaking();
+  document.querySelectorAll('.sentence, .word').forEach(el => el.classList.remove('active'));
+  const u = new SpeechSynthesisUtterance(fullText);
+  u.voice = getSelectedVoice();
+  u.rate = 0.96;
+  u.pitch = 1.0;
+  window.speechSynthesis.speak(u);
+  currentUtterance = u;
+});
+// 核心修改：renderResult接收连读数据，按分组渲染黑色下划线
+function renderResult(segments, linkPhoneticData) {
+  result.innerHTML = '';
+  segments.forEach((seg, sentIndex) => {
+    const sentenceDiv = document.createElement('div');
+    sentenceDiv.className = 'sentence';
+    const speaker = document.createElement('div');
+    speaker.className = 'speaker';
+    speaker.textContent = '🔊';
+    const wordsDiv = document.createElement('div');
+    wordsDiv.style.width = '100%';
+    // 获取当前句子的连读分组
+    const sentenceGroups = linkPhoneticData[sentIndex] || [];
+    // 遍历连读分组渲染
+    sentenceGroups.forEach(group => {
+      const { words, isLinked } = group;
+      if (isLinked) {
+        // 连读分组：包裹黑色下划线容器
+        const linkWrap = document.createElement('span');
+        linkWrap.className = 'link-phonetic';
+        words.forEach((word, wordIdx) => {
+          const w = document.createElement('span');
+          w.className = 'word';
+          w.textContent = word;
+          w.onclick = (e) => {
+            e.stopPropagation();
+            speakWord(word, w);
+          };
+          linkWrap.appendChild(w);
+          // 单词间加空格（最后一个不加）
+          if (wordIdx < words.length - 1) {
+            linkWrap.appendChild(document.createTextNode(' '));
+          }
+        });
+        wordsDiv.appendChild(linkWrap);
+      } else {
+        // 非连读：单个单词渲染
+        const word = words[0];
+        const w = document.createElement('span');
+        w.className = 'word';
+        w.textContent = word;
+        w.onclick = (e) => {
+          e.stopPropagation();
+          speakWord(word, w);
+        };
+        wordsDiv.appendChild(w);
+      }
+      // 分组间加空格（最后一个分组不加）
+      if (sentenceGroups.indexOf(group) < sentenceGroups.length - 1) {
+        wordsDiv.appendChild(document.createTextNode(' '));
+      }
+    });
+    sentenceDiv.appendChild(speaker);
+    sentenceDiv.appendChild(wordsDiv);
+    sentenceDiv.addEventListener('click', (e) => {
+      if (e.target.classList.contains('word')) return;
+      speakSentence(seg, sentenceDiv);
+    });
+    sentenceDiv.addEventListener('dblclick', (e) => {
+      if (e.target.classList.contains('word')) return;
+      window.getSelection().removeAllRanges();
+      speakSentence(seg, sentenceDiv);
+    });
+    result.appendChild(sentenceDiv);
+  });
+  updateHistoryNavButtons();
+}
+function speakSentence(text, sentenceEl) {
+  stopSpeaking();
+  document.querySelectorAll('.sentence, .word').forEach(el => el.classList.remove('active'));
+  const u = new SpeechSynthesisUtterance(text);
+  u.voice = getSelectedVoice();
+  u.rate = 0.96;
+  u.pitch = 1.0;
+  sentenceEl.classList.add('active');
+  u.onend = () => sentenceEl.classList.remove('active');
+  window.speechSynthesis.speak(u);
+  currentUtterance = u;
+}
+function speakWord(word, wordEl) {
+  stopSpeaking();
+  document.querySelectorAll('.sentence, .word').forEach(el => el.classList.remove('active'));
+  wordEl.classList.add('active');
+  const u = new SpeechSynthesisUtterance(word);
+  u.voice = getSelectedVoice();
+  u.rate = 0.9;
+  window.speechSynthesis.speak(u);
+  currentUtterance = u;
+}
+function stopSpeaking() {
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    currentUtterance = null;
+  }
+}
+</script>
+</body>
+</html>
