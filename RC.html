@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Round Coach</title>
+
+<style>
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont;
+    background: #111;
+    color: #fff;
+    text-align: center;
+  }
+
+  h1 {
+    margin-top: 40px;
+    font-size: 32px;
+  }
+
+  .container {
+    margin-top: 30px;
+  }
+
+  input {
+    width: 80px;
+    padding: 8px;
+    font-size: 18px;
+    text-align: center;
+  }
+
+  button {
+    margin: 10px;
+    padding: 12px 20px;
+    font-size: 18px;
+    border: none;
+    border-radius: 8px;
+  }
+
+  .start { background: #28a745; }
+  .pause { background: #ffc107; }
+  .reset { background: #dc3545; }
+
+  .status {
+    margin-top: 30px;
+    font-size: 26px;
+  }
+
+  .time {
+    font-size: 48px;
+    margin-top: 10px;
+  }
+</style>
+</head>
+
+<body>
+
+<h1>🏋️ Round Coach</h1>
+
+<div class="container">
+  <div>
+    Work (秒): <input id="work" value="30">
+  </div>
+  <div>
+    Rest (秒): <input id="rest" value="15">
+  </div>
+  <div>
+    Rounds: <input id="rounds" value="5">
+  </div>
+
+  <button class="start" onclick="start()">开始</button>
+  <button class="pause" onclick="pause()">暂停/继续</button>
+  <button class="reset" onclick="reset()">重置</button>
+</div>
+
+<div class="status" id="status">准备开始</div>
+<div class="time" id="time">00</div>
+
+<script>
+let state = "idle"
+let currentRound = 1
+let totalRounds = 0
+let workTime = 0
+let restTime = 0
+
+let phase = "work" // work / rest
+let endTime = 0
+let remaining = 0
+let rafId = null
+
+// 语音
+function speak(text) {
+  const utter = new SpeechSynthesisUtterance(text)
+  utter.lang = "en-US"
+  speechSynthesis.speak(utter)
+}
+
+// 防熄屏（尽力）
+let wakeLock = null
+async function keepAwake() {
+  try {
+    wakeLock = await navigator.wakeLock.request('screen')
+  } catch (e) {
+    console.log("WakeLock not supported")
+  }
+}
+
+// 格式化时间
+function format(t) {
+  return t < 10 ? "0" + t : t
+}
+
+// 主循环（高精度）
+function loop() {
+  if (state !== "running") return
+
+  const now = Date.now()
+  let left = Math.max(0, Math.ceil((endTime - now) / 1000))
+  document.getElementById("time").innerText = format(left)
+
+  if (left <= 0) {
+    nextPhase()
+  }
+
+  rafId = requestAnimationFrame(loop)
+}
+
+// 切换阶段
+function nextPhase() {
+  if (phase === "work") {
+    phase = "rest"
+    document.body.style.background = "#222"
+
+    speak("Rest")
+    document.getElementById("status").innerText = "休息"
+
+    endTime = Date.now() + restTime * 1000
+  } else {
+    currentRound++
+
+    if (currentRound > totalRounds) {
+      finish()
+      return
+    }
+
+    phase = "work"
+    document.body.style.background = "#111"
+
+    speak("Round " + currentRound)
+    document.getElementById("status").innerText = "第 " + currentRound + " 轮"
+
+    endTime = Date.now() + workTime * 1000
+  }
+}
+
+// 开始
+function start() {
+  if (state === "running") return
+
+  workTime = parseInt(document.getElementById("work").value)
+  restTime = parseInt(document.getElementById("rest").value)
+  totalRounds = parseInt(document.getElementById("rounds").value)
+
+  currentRound = 1
+  phase = "work"
+  state = "running"
+
+  speak("Round 1")
+  document.getElementById("status").innerText = "第 1 轮"
+
+  endTime = Date.now() + workTime * 1000
+
+  keepAwake()
+  loop()
+}
+
+// 暂停 / 继续
+function pause() {
+  if (state === "running") {
+    state = "paused"
+    remaining = endTime - Date.now()
+    cancelAnimationFrame(rafId)
+  } else if (state === "paused") {
+    state = "running"
+    endTime = Date.now() + remaining
+    loop()
+  }
+}
+
+// 重置
+function reset() {
+  state = "idle"
+  cancelAnimationFrame(rafId)
+
+  currentRound = 1
+  document.getElementById("status").innerText = "已重置"
+  document.getElementById("time").innerText = "00"
+}
+
+// 结束
+function finish() {
+  state = "idle"
+  cancelAnimationFrame(rafId)
+
+  speak("Workout complete")
+  document.getElementById("status").innerText = "完成 🎉"
+}
+</script>
+
+</body>
+</html>
