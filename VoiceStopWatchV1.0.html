@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>StopWatch Pro - Seconds Only</title>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --title-color: #FFFFFF; 
+            --text-secondary: #8E8E93;
+            --btn-green: #34C759; 
+            --btn-red: #FF3B30;   
+            --separator: #2C2C2E;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--title-color);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            padding-top: env(safe-area-inset-top);
+        }
+
+        /* 标题：大而厚重 */
+        .header {
+            width: 100%;
+            text-align: center;
+            padding: 40px 0 10px 0;
+        }
+
+        h1 {
+            font-size: 48px;
+            font-weight: 900;
+            margin: 0;
+            letter-spacing: -1px;
+            text-transform: uppercase;
+        }
+
+        /* 跑秒数字：纯秒显示 */
+        #display-container {
+            flex: 0 0 25vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #display {
+            font-size: 100px; /* 稍微再调大一点，因为没有分钟了 */
+            font-weight: 200;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* 按钮：文字颜色随标题，底色切换 */
+        .controls {
+            padding-bottom: 40px;
+        }
+
+        #main-btn {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            border: none;
+            font-size: 28px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--title-color); 
+        }
+
+        .btn-start { background-color: var(--btn-green); }
+        .btn-stop { background-color: var(--btn-red); }
+        #main-btn:active { transform: scale(0.9); }
+
+        /* 记录列表 */
+        #history-container {
+            flex: 1;
+            width: 100%;
+            overflow-y: auto;
+            border-top: 1px solid var(--separator);
+        }
+
+        .record-item-wrapper {
+            position: relative;
+            overflow: hidden;
+            background-color: #FF3B30; 
+        }
+
+        .record-item-content {
+            background: var(--bg-color);
+            height: 85px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 25px;
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            position: relative;
+            z-index: 2;
+            touch-action: pan-y;
+        }
+
+        .record-time { 
+            font-size: 30px; 
+            font-weight: 600; 
+            font-variant-numeric: tabular-nums;
+        }
+
+        .record-date { 
+            font-size: 13px; 
+            color: var(--text-secondary); 
+            text-align: right;
+            line-height: 1.4;
+        }
+
+        .delete-btn {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 100px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Stop watch</h1>
+    </div>
+
+    <div id="display-container">
+        <div id="display">0.00</div>
+    </div>
+
+    <div class="controls">
+        <button id="main-btn" class="btn-start">Start</button>
+    </div>
+
+    <div id="history-container">
+        <div id="history-list"></div>
+    </div>
+
+    <script>
+        let startTime, timerInterval, isRunning = false, wakeLock = null;
+        let lastSpokenSecond = -1, audioUnlocked = false;
+        let records = JSON.parse(localStorage.getItem('sw_v5_seconds') || '[]');
+
+        const display = document.getElementById('display');
+        const mainBtn = document.getElementById('main-btn');
+        const historyList = document.getElementById('history-list');
+
+        // 修改点：只计算秒和毫秒
+        function formatTimeSeconds(ms) {
+            if (ms < 0) ms = 0;
+            let totalSeconds = Math.floor(ms / 1000);
+            let centiseconds = Math.floor((ms % 1000) / 10);
+            return `${totalSeconds}.${centiseconds.toString().padStart(2, '0')}`;
+        }
+
+        function speak(text) {
+            if (!('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text.toString());
+            u.lang = 'zh-CN'; 
+            u.rate = 2.2; // 语速进一步加快，适应大秒数播报
+            window.speechSynthesis.speak(u);
+        }
+
+        async function requestWakeLock() {
+            try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+        }
+
+        mainBtn.addEventListener('click', () => {
+            if (!audioUnlocked) { speak(""); audioUnlocked = true; }
+            isRunning ? stopTimer() : startTimer();
+        });
+
+        function startTimer() {
+            isRunning = true;
+            mainBtn.innerText = 'Stop';
+            mainBtn.className = 'btn-stop';
+            startTime = Date.now();
+            lastSpokenSecond = -1;
+            requestWakeLock();
+            
+            timerInterval = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                display.innerText = formatTimeSeconds(elapsed);
+                
+                let curSec = Math.floor(elapsed / 1000);
+                if (curSec !== lastSpokenSecond) { 
+                    speak(curSec); 
+                    lastSpokenSecond = curSec; 
+                }
+            }, 10);
+        }
+
+        function stopTimer() {
+            isRunning = false;
+            clearInterval(timerInterval);
+            if (wakeLock) { wakeLock.release(); wakeLock = null; }
+            
+            const timeStr = display.innerText;
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()}<br>${now.getHours()}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+
+            records.unshift({ id: Date.now(), time: timeStr, date: dateStr });
+            if (records.length > 100) records.pop();
+            localStorage.setItem('sw_v5_seconds', JSON.stringify(records));
+
+            mainBtn.innerText = 'Start';
+            mainBtn.className = 'btn-start';
+            render();
+        }
+
+        function render() {
+            historyList.innerHTML = '';
+            records.forEach(rec => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'record-item-wrapper';
+                wrapper.innerHTML = `
+                    <div class="delete-btn" onclick="deleteRec(${rec.id})">删除</div>
+                    <div class="record-item-content">
+                        <div class="record-time">${rec.time} <small style="font-size:14px; font-weight:300; color:var(--text-secondary)">s</small></div>
+                        <div class="record-date">${rec.date}</div>
+                    </div>
+                `;
+
+                const content = wrapper.querySelector('.record-item-content');
+                let startX, startY, isHorizontal = null;
+
+                content.addEventListener('touchstart', e => {
+                    startX = e.touches[0].clientX;
+                    startY = e.touches[0].clientY;
+                    isHorizontal = null;
+                    content.style.transition = 'none';
+                }, {passive: true});
+
+                content.addEventListener('touchmove', e => {
+                    const diffX = startX - e.touches[0].clientX;
+                    const diffY = startY - e.touches[0].clientY;
+
+                    if (isHorizontal === null) {
+                        // 横向位移必须明显大于纵向位移
+                        if (Math.abs(diffX) > Math.abs(diffY) * 2.5) {
+                            isHorizontal = true;
+                        } else if (Math.abs(diffY) > Math.abs(diffX)) {
+                            isHorizontal = false;
+                        }
+                    }
+
+                    if (isHorizontal && diffX > 0) {
+                        if (e.cancelable) e.preventDefault();
+                        content.style.transform = `translateX(-${Math.min(diffX, 100)}px)`;
+                    }
+                }, {passive: false});
+
+                content.addEventListener('touchend', e => {
+                    content.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                    const diffX = startX - e.changedTouches[0].clientX;
+                    if (isHorizontal && diffX > 50) {
+                        content.style.transform = 'translateX(-100px)';
+                    } else {
+                        content.style.transform = 'translateX(0)';
+                    }
+                });
+
+                historyList.appendChild(wrapper);
+            });
+        }
+
+        window.deleteRec = (id) => {
+            records = records.filter(r => r.id !== id);
+            localStorage.setItem('sw_v5_seconds', JSON.stringify(records));
+            render();
+        };
+
+        render();
+    </script>
+</body>
+</html>
